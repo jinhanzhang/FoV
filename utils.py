@@ -21,28 +21,66 @@ class FoVDataset(Dataset):
         return x,y
     
 # visualize data, target, and prediction
-feature_size = FEATURE_SIZE
-print(feature_size)
-x_data = x_val[::8,:,:].reshape(-1,9)
-print(x_data.shape)
-y_data = y_val[::8,:,:].reshape(-1,9)
-plt.figure()
-if feature_size<=3:
-    fig, ax = plt.subplots(1, feature_size, figsize=(feature_size*4,4))
-    for i in range(feature_size):
-        ax[i].plot(x_data[:,i])
-        ax[i].plot(y_data[:,i])
-else:
-    rows = (feature_size-1)//3+1
-    fig, ax = plt.subplots(rows, 3, figsize=(12,4*rows))
-    for i in range(rows):
-        for j in range(3):
-            if i*3+j<feature_size:
-                ax[i][j].plot(x_data[:,3*i+j])
-                ax[i][j].plot(y_data[:,3*i+j])
-fig.legend(["data","target"])
-plt.show()
+def visualize_data(data, target, prediction=None):
+    batch_size, seq_len, feature_size = data.shape
+    rand_batch =random.randint(batch_size)
+    rand_data = data[rand_batch]
+    rand_target = target[rand_batch]
+    if prediction is not None:
+        rand_pred = prediction[rand_batch]
+    x = np.arange(seq_len)
+    plt.figure()
+    if feature_size<=3:
+        fig, ax = plt.subplots(1, feature_size, figsize=(feature_size*4,4))
+        for i in range(feature_size):
+            ax[i].plot(rand_data[:,i])
+            ax[i].plot(x+seq_len, rand_target[:,i])
+            if prediction is not None:
+                ax[i].plot(x+seq_len, rand_pred[:,i])
+    else:
+        rows = (feature_size-1)//3+1
+        fig, ax = plt.subplots(rows, 3, figsize=(12,4*rows))
+        for i in range(rows):
+            for j in range(3):
+                if i*3+j<feature_size:
+                    ax[i][j].plot(rand_data[:,3*i+j])
+                    ax[i][j].plot(x+seq_len, rand_target[:,3*i+j])
+                    if prediction is not None:
+                        ax[i][j].plot(x+seq_len,rand_pred[:,3*i+j])
+    if prediction is None:
+        fig.legend(["data","target"])
+    else:
+        fig.legend(["data","target","pred"])
+    plt.show()
 
+
+# checkpointing
+def save_ckpt(path, model, optimizer, epoch, train_losses, val_losses):
+    
+#     torch.save({'net': network.state_dict(), 'opt': optimizer.state_dict()}, fn)
+    path = f'{path}/batch_{BATCH_SIZE}_{HISTORY_TIME}_{PREDICTION_TIME}_ckpts.pt'
+    torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_losses': train_losses,
+            'val_losses': val_losses,
+            'lr': lr
+            }, path)
+
+def load_ckpt(path, model, optimizer, device='cuda'):
+    if device == 'cpu':
+        checkpoint = torch.load(path,map_location=torch.device('cpu'))
+    else:
+        checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    train_losses = checkpoint['train_losses']
+    val_losses = checkpoint['val_losses']
+#     lr = checkpoint['lr']
+    model.eval()
+    return model, optimizer, train_losses, val_losses
 
 
 
