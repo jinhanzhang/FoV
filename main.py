@@ -1,5 +1,7 @@
 import argparse
+from ast import arg, parse
 import random
+from datetime import datetime
 import numpy as np
 import glob
 import math
@@ -17,12 +19,12 @@ from torch.utils.data import DataLoader, Dataset, Subset, random_split
 from torchvision.transforms import ToTensor
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 import sys
 import wandb
 wandb.__version__
 from utils import *
-from dataloader import 
+# from dataloader import 
 
 
 def parse_option():
@@ -30,11 +32,24 @@ def parse_option():
     # basic config
     parser.add_argument('--model', type=str, required=True, default='MyTransformer',
                         help='model name, options: [Autoformer, Transformer, iTransformer]')
-    
-    
-    # data loader
-    parser.add_argument('--root_path', type=str, default=f'{os.path.dirname(os.getcwd())}', help='root path of the data file')
+    parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
+    parser.add_argument('--hist_time', type=int, default=2, help='history data time')
+    parser.add_argument('--pred_time', type=int, default=2, help='prediction data time')
+    parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+    parser.add_argument('--feature_names', type=str, default='XYZ_FEATURE_NAMES', help='[DEFAULT_FEATURE_NAMES, XYZ_FEATURE_NAMES, ONE_FEATURE, SC_FEATURE_NAMES, RPY_FEATURE_NAMES, ANGLE_FEATURE_NAMES]')
+    parser.add_argument('--load_model', type=bool, default=False, help='load model')
+    parser.add_argument('--use_wandb', type=bool, default=False, help='use wandb for logging')
+    # transformer config
+    parser.add_argument('--n_heads', type=int, default=3, help='number of heads')
+    parser.add_argument('--head_dim', type=int, default=3, help='head dimension')
+    parser.add_argument('--dim_val', type=int, default=9, help='embedding dimension')
+    parser.add_argument('--n_decoder_layers', type=int, default=2, help='number of decoder layers')
+    parser.add_argument('--n_encoder_layers', type=int, default=2, help='number of encoder layers')
+    parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
+    
+    
+    return parser.parse_args()
     
 
 if __name__ == '__main__':
@@ -42,8 +57,166 @@ if __name__ == '__main__':
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
+    id = datetime.now().strftime("%m/%d/%Y-%H:%M:%S")
+    saved_path = f'saved_results/{id}'
+    if not os.path.exists(saved_path):
+        os.makedirs(saved_path)
+    # parse augments
+    args = parse_option()
+    
+    # config
+    PROJECT_PATH = args.root_path
+    FRAME_RATE = 60 # 60 frames/sec
+    MAX_HISTORY_TIME = 10
+    MAX_PREDICTION_TIME = 10
+    HISTORY_TIME = args.hist_time
+    PREDICTION_TIME = args.pred_time
+    HISTORY_LENGTH = HISTORY_TIME*FRAME_RATE
+    PREDICTION_LENGTH = PREDICTION_TIME*FRAME_RATE
+    MAX_HISTORY_LENGTH = MAX_HISTORY_TIME*FRAME_RATE
+    MAX_PREDICTION_LENGTH = MAX_PREDICTION_TIME*FRAME_RATE
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    print("device: ", DEVICE)
+    TOTAL_FEATURE_NAMES = ['head_x','head_y','head_z','head_r_sin','head_r_cos','head_p_sin','head_p_cos','head_y_sin',\
+    'head_y_cos','head_rx','head_ry','head_rz']
+    DEFAULT_FEATURE_NAMES = ['head_x','head_y','head_z','head_r_sin','head_r_cos','head_p_sin','head_p_cos','head_y_sin',\
+    'head_y_cos']
+    XYZ_FEATURE_NAMES = ['head_x', 'head_y', 'head_z']
+    ONE_FEATURE = ['head_x']
+    SC_FEATURE_NAMES = ['head_r_sin','head_r_cos','head_p_sin','head_p_cos','head_y_sin','head_y_cos']
+    RPY_FEATURE_NAMES = ['head_rx','head_ry','head_rz']
+    ANGLE_FEATURE_NAMES = ['head_r_cos','head_p_sin','head_p_cos','head_y_sin','head_y_cos','head_rx','head_ry','head_rz']
+    FEATURE_NAMES = eval(args.feature_names)
+    FEATURE_INDEX = [TOTAL_FEATURE_NAMES.index(x) for x in FEATURE_NAMES]
+    DEFAULT_FEATURE_SIZE = len(DEFAULT_FEATURE_NAMES)
+    FEATURE_SIZE = len(FEATURE_NAMES)
+    BATCH_SIZE = args.batch_size
+    LOAD_MODEL = args.load_model
+    
+    # load data
+    processed_data_path = f'{PROJECT_PATH}/processed_data'
+    x_train = np.loadtxt(f'{processed_data_path}/x_train_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
+    y_train = np.loadtxt(f'{processed_data_path}/y_train_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
+    x_val = np.loadtxt(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
+    y_val = np.loadtxt(f'{processed_data_path}/y_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
+    x_test = np.loadtxt(f'{processed_data_path}/x_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
+    y_test = np.loadtxt(f'{processed_data_path}/y_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
+    mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
+    
+    # create dataset and dataloader
+    feature_names = FEATURE_NAMES
+    feature_idx = FEATURE_INDEX
+    x_train = x_train[:,:,feature_idx]
+    y_train = y_train[:,:,feature_idx]
+    x_val = x_val[:,:,feature_idx]
+    y_val = y_val[:,:,feature_idx]
+    x_test = x_test[:,:,feature_idx]
+    y_test = y_test[:,:,feature_idx]
+    train_data = FoVDataset(x_train, y_train, feature_idx)
+    val_data = FoVDataset(x_val, y_val, feature_idx)
+    test_data = FoVDataset(x_test, y_test, feature_idx)
+    train_dataloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    val_dataloader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
+    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
     
     
+    #training hyperparams
+    in_seq_len = HISTORY_LENGTH
+    out_seq_len = PREDICTION_LENGTH
+    feature_size = FEATURE_SIZE
+    lr = 0.005
+    tf_rate = 0.5
+    epochs = 200
+    batch_size = BATCH_SIZE
+    n_batches = len(train_dataloader)
+    use_wandb = args.use_wandb
+    # init model
+    model_name = args.model
+    if model_name == 'MyTransformer':
+        from models.MyTransformer import Transformer
+        n_heads = args.n_heads ##4
+        head_dim = args.head_dim #32 # dimension of each head, not total
+        dim_val = args.dim_val #16#n_heads*head_dim # embedding dimension, all heads together
+        n_decoder_layers = args.n_decoder_layers
+        n_encoder_layers = args.n_encoder_layers
+        pe_mode = args.pe_mode
+        model = Transformer(n_heads, head_dim, feature_size, in_seq_len, out_seq_len, n_encoder_layers, n_decoder_layers, pe_mode, device=DEVICE).to(device=DEVICE)
+    else:
+        print("Model not found")
+        sys.exit(0)
+
+    #init network and optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+    #keep track of loss for graph
+    train_mse_losses = []
+    val_mse_losses = []
+    test_mse_losses = []
+    sep_train_mse_losses = []
+    sep_val_mse_losses = []
+    sep_test_mse_losses = []
+    train_pearsonr_arr = []
+    val_pearsonr_arr = []
+    test_pearsonr_arr = []
     
-    
-    
+    # Trainig
+    use_wandb = args.use_wandb
+    if LOAD_MODEL:
+        load_ckpt(f"{PROJECT_PATH}/checkpoints/batch_{BATCH_SIZE}_{HISTORY_TIME}_{PREDICTION_TIME}_ckpts.pt".format(os.getcwd(), epochs, batch_size), model, optimizer)
+    lr = 0.1
+    # scaler = torch.cuda.amp.GradScaler()
+    # print(scaler)
+    best_val_loss = float('inf')
+    #writer = SummaryWriter("run/loss_plot")
+    step = 0
+    for epoch in tqdm(range(1, epochs+1)):
+        print(f'Epoch #{epoch}')
+        epoch_start_time = time.time()
+        train_result_path = f'{saved_path}/train_{epoch}_result.png'
+        train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, train_dataloader, optimizer, scheduler, step, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+    #     print(train_loss)
+        train_mse_losses.append(train_loss)
+        sep_train_mse_losses.append(sep_train_loss)
+        mean_loss = sum(train_mse_losses)/len(train_mse_losses)
+        val_result_path = f'{saved_path}/val_{epoch}_result.png'
+        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, val_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+        val_mse_losses.append(val_loss)
+        sep_val_mse_losses.append(sep_val_loss)
+        test_result_path = f'{saved_path}/test_{epoch}_result.png'
+        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, test_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+        test_mse_losses.append(test_loss)
+        sep_test_mse_losses.append(sep_test_loss)
+        elapsed = time.time() - epoch_start_time
+        print('-' * 89)
+        print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+            f'valid loss {val_loss:5.4f} | mean loss {mean_loss:8.4f}')
+        print('-' * 89)
+        if epoch % 2 == 1:
+            fig, ax = plt.subplots(1,2, figsize=(12,4))
+            #ax.plot([i.detach().cpu().numpy() for i in test_losses], label='train loss')
+            ax[0].plot([i.detach().cpu().numpy() for i in val_mse_losses[5:]] , label='validation loss')
+            ax[0].plot([i  for i in train_mse_losses[5:]] , label='train loss')
+            ax[0].set_title("Losses")
+
+            ax[0].legend()
+            ax[1].plot([i.detach().cpu().numpy() for i in test_mse_losses], label='test loss')
+            ax[1].set_title("Losses")
+            ax[1].legend()
+            #fig.canvas.draw()
+            plt.show()
+            fig.savefig(f'{saved_path}/losses_{epoch}.png')
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            # save model
+    #         save_ckpt("{}/checkpoints/epoch_{}_ckpts.pt".format(os.getcwd(), epoch), model, optimizer,epochs, val_loss)
+            save_dict = {
+                'epoch': epoch,
+                'train_mse_losses': train_mse_losses,
+                'val_mse_losses': val_mse_losses
+            }
+            save_ckpt(f"{PROJECT_PATH}/checkpoints/batch_{BATCH_SIZE}_{HISTORY_TIME}to{PREDICTION_TIME}_ckpts.pt", model, optimizer, save_dict)
+
+        # scheduler.step(mean_loss)
+        scheduler.step()
+
+        

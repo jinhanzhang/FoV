@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 from utils import *
 
-
 def a_norm(Q, K, mask = None):
     m = torch.matmul(Q, K.transpose(2,1).float())
     m /= torch.sqrt(torch.tensor(Q.shape[-1]).float())
@@ -24,9 +23,9 @@ def attention(Q, K, V, mask = None):
 class AttentionBlock(torch.nn.Module):
     def __init__(self, dim_val, head_dim):
         super(AttentionBlock, self).__init__()
-        self.value = nn.Linear(dim_val, head_dim, bias=False)
-        self.key = nn.Linear(dim_val, head_dim, bias=False)
-        self.query = nn.Linear(dim_val, head_dim, bias=False)
+        self.value = nn.Linear(dim_val, head_dim, bias=True)
+        self.key = nn.Linear(dim_val, head_dim, bias=True)
+        self.query = nn.Linear(dim_val, head_dim, bias=True)
     
     def forward(self, x, kv = None, mask = None):
         if(kv is None):
@@ -80,7 +79,7 @@ class PositionalEncoding(nn.Module):
 
 #TODO
 class RelativePositionalEncoding(nn.Module):
-    def __init__(self, seq_len, dropout=0.1, max_len=5000):
+    def __init__(self, seq_len, outout=0.1, max_len=5000):
         super(RelativePositionalEncoding, self).__init__()
         self.seq_len = seq_len
         self.table = nn.Linear(seq_len, 2*seq_len)
@@ -107,8 +106,8 @@ class EncoderLayer(torch.nn.Module):
         x1 = self.norm1(x + a)
         # does not have an forward expansion factor here! But maybe not a bad thing since we want smaller embedding size
         a1 = self.fc1(F.elu(self.fc2(x1)))
-#         out = self.dropout(self.norm2(x1 + a1))
         out = self.norm2(x1 + a1) # [N, enc_seq_len, dim_val]
+#         out = self.dropout(self.norm2(x1 + a1))
         #import pdb;pdb.set_trace()
         return out
 
@@ -135,8 +134,8 @@ class DecoderLayer(torch.nn.Module):
         return x
 
 class Transformer(torch.nn.Module):
-    def __init__(self, dim_val, head_dim, feature_size, in_seq_len, out_seq_len, n_decoder_layers = 1, \
-                 n_encoder_layers = 1, n_heads = 1, pe_mode = 'standard', device='cuda'):
+    def __init__(self, n_heads, head_dim, feature_size, in_seq_len, out_seq_len, n_encoder_layers = 1, \
+                 n_decoder_layers = 1, pe_mode = 'standard', device='cuda'):
         """
             dim_val: d_model - 64
             head_dim: 16
@@ -145,9 +144,15 @@ class Transformer(torch.nn.Module):
             out_seq_len: decoder output sequence length - 1 or 600?
             pe_mode: positional encoding mode - 'relative' or 'standard' or 'none'
         """
-        self.device=device
         super(Transformer, self).__init__()
+        dim_val = n_heads*head_dim
+        self.device=device
         self.in_seq_len = in_seq_len
+        self.out_seq_len = out_seq_len
+        self.pe_mode = pe_mode
+        self.n_heads = n_heads
+        self.head_dim = head_dim
+        self.dim_val = dim_val
         #Initiate encoder and Decoder layers
         self.encs = nn.ModuleList()
         for i in range(n_encoder_layers):
@@ -156,7 +161,7 @@ class Transformer(torch.nn.Module):
 #         self.decs = nn.ModuleList()
 #         for i in range(n_decoder_layers):
 #             self.decs.append(DecoderLayer(dim_val, head_dim, n_heads))
-        self.pe_mode = pe_mode
+        
         if pe_mode == 'standard':
             self.pos = PositionalEncoding(dim_val)
         #Dense layers for managing network inputs and outputs
@@ -186,7 +191,7 @@ class Transformer(torch.nn.Module):
         return trg_mask.to(self.device)
     
     def forward(self, x, target=None):
-        # x: [N, enc_seq_len, feature_size] = [8, 600, 9]
+        # x: [N, enc_seq_len, feature_size] = [N, 120, 3]
         # dec_input = [N, dec_seq_len, feature_size]
         
         # MLP
@@ -210,3 +215,5 @@ class Transformer(torch.nn.Module):
         #out = self.final_activation(out)
         #import pdb;pdb.set_trace()
         return out
+    
+
