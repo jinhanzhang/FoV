@@ -185,12 +185,13 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
                 visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
     return return_loss/(batch_idx+1), sep_return_loss/(batch_idx+1), train_pearsonr
 
-def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feature_names, plot_flag = False):
+def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feature_names,\
+    plot_flag = False, timestamp=False):
     feature_size = len(feature_names)
     loss_names = list(map(lambda x: x+'_loss', feature_names))
     model.eval()
     total_loss = 0.
-    sep_total_loss = np.zeros((1,feature_size))
+    sep_total_loss = np.zeros((1,feature_size if timestamp==False else feature_size+1))
     loss_dict_valid = {}
     iter_count = 0
     with torch.no_grad():

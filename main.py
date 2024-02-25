@@ -106,6 +106,8 @@ if __name__ == '__main__':
     FEATURE_INDEX = [TOTAL_FEATURE_NAMES.index(x) for x in FEATURE_NAMES]
     DEFAULT_FEATURE_SIZE = len(DEFAULT_FEATURE_NAMES)
     FEATURE_SIZE = len(FEATURE_NAMES)
+    if args.timestamp:
+        FEATURE_SIZE += 1
     BATCH_SIZE = args.batch_size
     LOAD_MODEL = args.load_model
     
@@ -230,11 +232,11 @@ if __name__ == '__main__':
         sep_train_mse_losses.append(sep_train_loss)
         mean_loss = sum(train_mse_losses)/len(train_mse_losses)
         val_result_path = f'{saved_path}/val_{epoch}_result.png'
-        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, val_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, val_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
         val_mse_losses.append(val_loss)
         sep_val_mse_losses.append(sep_val_loss)
         test_result_path = f'{saved_path}/test_{epoch}_result.png'
-        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, test_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, test_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
         test_mse_losses.append(test_loss)
         sep_test_mse_losses.append(sep_test_loss)
         elapsed = time.time() - epoch_start_time
