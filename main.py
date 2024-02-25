@@ -24,7 +24,8 @@ import sys
 import wandb
 wandb.__version__
 from utils import *
-# from dataloader import 
+# from dataloader import
+
 
 
 def parse_option():
@@ -35,7 +36,7 @@ def parse_option():
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
     parser.add_argument('--hist_time', type=int, default=2, help='history data time')
-    parser.add_argument('--pred_time', type=int, default=2, help='prediction data time')
+    parser.add_argument('--pred_time', type=int, default=1, help='prediction data time')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('--feature_names', type=str, default='XYZ_FEATURE_NAMES', help='[DEFAULT_FEATURE_NAMES, XYZ_FEATURE_NAMES, ONE_FEATURE, SC_FEATURE_NAMES, RPY_FEATURE_NAMES, ANGLE_FEATURE_NAMES]')
     parser.add_argument('--load_model', type=bool, default=False, help='load model')
@@ -141,6 +142,16 @@ if __name__ == '__main__':
         n_encoder_layers = args.n_encoder_layers
         pe_mode = args.pe_mode
         model = Transformer(n_heads, head_dim, feature_size, in_seq_len, out_seq_len, n_encoder_layers, n_decoder_layers, pe_mode, device=DEVICE).to(device=DEVICE)
+    elif model_name == 'iTransformer':
+        sys.path.append('Time-Series-Library-main/')
+        sys.path.append('Time-Series-Library-main')
+        from models.iTransformer import iTransformer
+        model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = 9, d_model = 9,\
+                    norm = False).float().to(device)
+        import pdb; pdb.set_trace()
+# from models.TimesNet import TimesNet
+# from models.PatchTST import PatchTST
+    
     else:
         print("Model not found")
         sys.exit(0)
@@ -218,5 +229,3 @@ if __name__ == '__main__':
 
         # scheduler.step(mean_loss)
         scheduler.step()
-
-        

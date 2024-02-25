@@ -1,1 +1,1 @@
-# FoV
+rsync -avzh * --exclude={'checkpoints/','checkpoints'} greene:/scratch/xc1490/projects/FoV/
