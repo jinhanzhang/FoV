@@ -38,6 +38,7 @@ def visualize_data(path, data, target, prediction=None):
         rand_pred = prediction[rand_batch]
     x = np.arange(seq_len)
     plt.figure()
+    #import pdb;pdb.set_trace()
     if feature_size<=3:
         fig, ax = plt.subplots(1, feature_size, figsize=(feature_size*4,4))
         for i in range(feature_size):

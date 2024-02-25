@@ -32,7 +32,7 @@ def parse_option():
     parser = argparse.ArgumentParser(description='FoV')
     # basic config
     parser.add_argument('--model', type=str, required=True, default='MyTransformer',
-                        help='model name, options: [Autoformer, Transformer, iTransformer]')
+                        help='model name, options: [Autoformer, Transformer, iTransformer, Reformer, TimesNet, PatchTST]')
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
     parser.add_argument('--hist_time', type=int, default=2, help='history data time')
@@ -145,12 +145,35 @@ if __name__ == '__main__':
     elif model_name == 'iTransformer':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
-        from models.iTransformer import iTransformer
-        model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = 9, d_model = 9,\
-                    norm = False).float().to(device)
-        import pdb; pdb.set_trace()
-# from models.TimesNet import TimesNet
-# from models.PatchTST import PatchTST
+        from time_series_lib.iTransformer import iTransformer
+        model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
+                    d_model = args.dim_val,\
+                    norm = False).float().to(DEVICE)
+    elif model_name == 'TimesNet':
+        sys.path.append('Time-Series-Library-main/')
+        sys.path.append('Time-Series-Library-main')
+        from time_series_lib.TimesNet import TimesNet
+        model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
+                    d_model =args.dim_val, c_out = FEATURE_SIZE, \
+                    norm = False).float().to(DEVICE)
+    elif model_name == 'PatchTST':
+        #TODO: feature dimension issue, PE error
+        sys.path.append('Time-Series-Library-main/')
+        sys.path.append('Time-Series-Library-main')
+        from time_series_lib.PatchTST import PatchTST
+        model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
+                    d_model = args.dim_val,\
+                    norm = False).float().to(DEVICE)
+    elif model_name == 'Reformer':
+        from reformer_pytorch import Reformer
+        model = Reformer(
+            dim = FEATURE_SIZE,
+            depth = args.n_encoder_layers,
+            heads = args.n_heads,
+            lsh_dropout = 0.1,
+            bucket_size = 60,
+            causal = False
+        ).to(device=DEVICE).requires_grad_(True)
     
     else:
         print("Model not found")
