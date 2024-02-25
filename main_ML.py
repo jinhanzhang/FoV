@@ -44,7 +44,7 @@ def parse_option():
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
     parser.add_argument('--hist_time', type=int, default=2, help='history data time')
-    parser.add_argument('--pred_time', type=int, default=1, help='prediction data time')
+    parser.add_argument('--pred_time', type=int, default=2, help='prediction data time')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('--feature_names', type=str, default='XYZ_FEATURE_NAMES', help='[DEFAULT_FEATURE_NAMES, XYZ_FEATURE_NAMES, ONE_FEATURE, SC_FEATURE_NAMES, RPY_FEATURE_NAMES, ANGLE_FEATURE_NAMES]')
     parser.add_argument('--load_model', type=bool, default=False, help='load model')
@@ -151,11 +151,16 @@ if __name__ == '__main__':
         reg = xgb.XGBRegressor(n_estimators=1000)
         bs, input_temporal_dim, input_feature_dim = x_train.shape
         bs, output_temporal_dim, output_feature_dim = y_train.shape
-        x_train = x_train.reshape(x_train.shape[0], -1)
-        x_test = x_test.reshape(x_test.shape[0], -1)
-        y_train = y_train.reshape(y_train.shape[0], -1)
-        y_test = y_test.reshape(y_test.shape[0], -1)
-
+        # x_train = x_train.reshape(x_train.shape[0], -1)
+        # x_test = x_test.reshape(x_test.shape[0], -1)
+        # y_train = y_train.reshape(y_train.shape[0], -1)
+        # y_test = y_test.reshape(y_test.shape[0], -1)
+        x_train = np.swapaxes(x_train,2,1).reshape(-1, input_temporal_dim)
+        x_test = np.swapaxes(x_test,2,1).reshape(-1, input_temporal_dim)
+        y_train = np.swapaxes(y_train,2,1).reshape(-1, output_temporal_dim)
+        y_test = np.swapaxes(y_test,2,1).reshape(-1, output_temporal_dim)
+        print ('x_train shape: {}, y_train shape: {}, x_test shape: {}, y_test shape: {}'.format(\
+                x_train.shape, y_train.shape, x_test.shape, y_test.shape))
         reg.fit( x_train, y_train,
             eval_set=[(x_train, y_train), (x_test, y_test)],
             early_stopping_rounds=50, #stop if 50 consequent rounds without decrease of error
