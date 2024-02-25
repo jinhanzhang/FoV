@@ -1,4 +1,4 @@
-# Copyright 2020-2024 Jinhan, Xupeng
+# Copyright 2020-2024 Xupeng
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,12 +26,6 @@ import os
 import copy
 import time
 import torch
-from torch import nn, Tensor
-import torch.nn.functional as F
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
-from torch.utils.data import DataLoader, Dataset, Subset, random_split
-from torchvision.transforms import ToTensor
-import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import sys
@@ -39,13 +33,13 @@ import wandb
 wandb.__version__
 from utils import *
 # from dataloader import
-
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 
 def parse_option():
     parser = argparse.ArgumentParser(description='FoV')
     # basic config
-    parser.add_argument('--model', type=str, required=True, default='MyTransformer',
+    parser.add_argument('--model', type=str, required=True, default='XGBOOST',
                         help='model name, options: [Autoformer, Transformer, iTransformer, Reformer, TimesNet, PatchTST]')
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
@@ -147,122 +141,26 @@ if __name__ == '__main__':
     use_wandb = args.use_wandb
     # init model
     model_name = args.model
-    if model_name == 'MyTransformer':
-        from models.MyTransformer import Transformer
-        n_heads = args.n_heads ##4
-        head_dim = args.head_dim #32 # dimension of each head, not total
-        dim_val = args.dim_val #16#n_heads*head_dim # embedding dimension, all heads together
-        n_decoder_layers = args.n_decoder_layers
-        n_encoder_layers = args.n_encoder_layers
-        pe_mode = args.pe_mode
-        model = Transformer(n_heads, head_dim, feature_size, in_seq_len, out_seq_len, n_encoder_layers, n_decoder_layers, pe_mode, device=DEVICE).to(device=DEVICE)
-    elif model_name == 'iTransformer':
-        sys.path.append('Time-Series-Library-main/')
-        sys.path.append('Time-Series-Library-main')
-        from time_series_lib.iTransformer import iTransformer
-        model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model = args.dim_val,\
-                    norm = False).float().to(DEVICE)
-    elif model_name == 'TimesNet':
-        sys.path.append('Time-Series-Library-main/')
-        sys.path.append('Time-Series-Library-main')
-        from time_series_lib.TimesNet import TimesNet
-        model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model =args.dim_val, c_out = FEATURE_SIZE, \
-                    norm = False).float().to(DEVICE)
-    elif model_name == 'PatchTST':
-        #TODO: feature dimension issue, PE error
-        sys.path.append('Time-Series-Library-main/')
-        sys.path.append('Time-Series-Library-main')
-        from time_series_lib.PatchTST import PatchTST
-        model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model = args.dim_val,\
-                    norm = False).float().to(DEVICE)
-    elif model_name == 'Reformer':
-        from reformer_pytorch import Reformer
-        model = Reformer(
-            dim = FEATURE_SIZE,
-            depth = args.n_encoder_layers,
-            heads = args.n_heads,
-            lsh_dropout = 0.1,
-            bucket_size = 60,
-            causal = False
-        ).to(device=DEVICE).requires_grad_(True)
-    
+    if model_name == 'XGBOOST':
+        import xgboost as xgb #pip install xgboost
+        # https://www.kaggle.com/code/furiousx7/xgboost-time-series
+        reg = xgb.XGBRegressor(n_estimators=1000)
+        bs, input_temporal_dim, input_feature_dim = x_train.shape
+        bs, output_temporal_dim, output_feature_dim = y_train.shape
+        x_train = x_train.reshape(x_train.shape[0], -1)
+        x_test = x_test.reshape(x_test.shape[0], -1)
+        y_train = y_train.reshape(y_train.shape[0], -1)
+        y_test = y_test.reshape(y_test.shape[0], -1)
+
+        reg.fit( x_train, y_train,
+            eval_set=[(x_train, y_train), (x_test, y_test)],
+            early_stopping_rounds=50, #stop if 50 consequent rounds without decrease of error
+            verbose=False) # Change verbose to True if you want to see it train
+        y_pred = reg.predict(x_test)
+        y_test = y_test.reshape(bs, output_temporal_dim, output_feature_dim)
+        y_pred = y_pred.reshape(bs, output_temporal_dim, output_feature_dim)
     else:
         print("Model not found")
         sys.exit(0)
 
-    #init network and optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
-    #keep track of loss for graph
-    train_mse_losses = []
-    val_mse_losses = []
-    test_mse_losses = []
-    sep_train_mse_losses = []
-    sep_val_mse_losses = []
-    sep_test_mse_losses = []
-    train_pearsonr_arr = []
-    val_pearsonr_arr = []
-    test_pearsonr_arr = []
     
-    # Trainig
-    use_wandb = args.use_wandb
-    if LOAD_MODEL:
-        load_ckpt(f"{PROJECT_PATH}/checkpoints/batch_{BATCH_SIZE}_{HISTORY_TIME}_{PREDICTION_TIME}_ckpts.pt".format(os.getcwd(), epochs, batch_size), model, optimizer)
-    lr = 0.1
-    # scaler = torch.cuda.amp.GradScaler()
-    # print(scaler)
-    best_val_loss = float('inf')
-    #writer = SummaryWriter("run/loss_plot")
-    step = 0
-    for epoch in tqdm(range(1, epochs+1)):
-        print(f'Epoch #{epoch}')
-        epoch_start_time = time.time()
-        train_result_path = f'{saved_path}/train_{epoch}_result.png'
-        train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, train_dataloader, optimizer, scheduler, step, feature_names, plot_flag=True if epoch % 2 == 1 else False)
-    #     print(train_loss)
-        train_mse_losses.append(train_loss)
-        sep_train_mse_losses.append(sep_train_loss)
-        mean_loss = sum(train_mse_losses)/len(train_mse_losses)
-        val_result_path = f'{saved_path}/val_{epoch}_result.png'
-        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, val_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
-        val_mse_losses.append(val_loss)
-        sep_val_mse_losses.append(sep_val_loss)
-        test_result_path = f'{saved_path}/test_{epoch}_result.png'
-        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, test_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False)
-        test_mse_losses.append(test_loss)
-        sep_test_mse_losses.append(sep_test_loss)
-        elapsed = time.time() - epoch_start_time
-        print('-' * 89)
-        print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-            f'valid loss {val_loss:5.4f} | mean loss {mean_loss:8.4f}')
-        print('-' * 89)
-        if epoch % 10 == 1:
-            fig, ax = plt.subplots(1,2, figsize=(12,4))
-            #ax.plot([i.detach().cpu().numpy() for i in test_losses], label='train loss')
-            ax[0].plot([i.detach().cpu().numpy() for i in val_mse_losses[5:]] , label='validation loss')
-            ax[0].plot([i  for i in train_mse_losses[5:]] , label='train loss')
-            ax[0].set_title("Losses")
-
-            ax[0].legend()
-            ax[1].plot([i.detach().cpu().numpy() for i in test_mse_losses], label='test loss')
-            ax[1].set_title("Losses")
-            ax[1].legend()
-            #fig.canvas.draw()
-            plt.show()
-            fig.savefig(f'{saved_path}/losses_{epoch}.png')
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            # save model
-    #         save_ckpt("{}/checkpoints/epoch_{}_ckpts.pt".format(os.getcwd(), epoch), model, optimizer,epochs, val_loss)
-            save_dict = {
-                'epoch': epoch,
-                'train_mse_losses': train_mse_losses,
-                'val_mse_losses': val_mse_losses
-            }
-            save_ckpt(f"{PROJECT_PATH}/checkpoints/batch_{BATCH_SIZE}_{HISTORY_TIME}to{PREDICTION_TIME}_ckpts.pt", model, optimizer, save_dict)
-
-        # scheduler.step(mean_loss)
-        scheduler.step()
