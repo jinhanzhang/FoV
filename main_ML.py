@@ -144,6 +144,10 @@ if __name__ == '__main__':
     if model_name == 'XGBOOST':
         import xgboost as xgb #pip install xgboost
         # https://www.kaggle.com/code/furiousx7/xgboost-time-series
+        #TODO: 3 dimensional issue
+        #a temporal work around is to flatten the time and feature dimension? i don't think it makes sense
+        #should maybe flatten batch and feature dimension
+        #should we add another time count dimension as the feature?
         reg = xgb.XGBRegressor(n_estimators=1000)
         bs, input_temporal_dim, input_feature_dim = x_train.shape
         bs, output_temporal_dim, output_feature_dim = y_train.shape
