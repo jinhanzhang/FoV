@@ -143,6 +143,8 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
         optimizer.zero_grad()
         sep_mse_loss, train_pearsonr = my_loss(output, targets, feature_names)
         loss = torch.sum(sep_mse_loss[:feature_size])
+        if model.__class__.__name__ =='Reformer':
+            loss.requires_grad_(True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
         optimizer.step()

@@ -225,7 +225,7 @@ if __name__ == '__main__':
         print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
             f'valid loss {val_loss:5.4f} | mean loss {mean_loss:8.4f}')
         print('-' * 89)
-        if epoch % 2 == 1:
+        if epoch % 10 == 1:
             fig, ax = plt.subplots(1,2, figsize=(12,4))
             #ax.plot([i.detach().cpu().numpy() for i in test_losses], label='train loss')
             ax[0].plot([i.detach().cpu().numpy() for i in val_mse_losses[5:]] , label='validation loss')
