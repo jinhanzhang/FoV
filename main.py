@@ -62,6 +62,7 @@ def parse_option():
     parser.add_argument('--n_decoder_layers', type=int, default=2, help='number of decoder layers')
     parser.add_argument('--n_encoder_layers', type=int, default=2, help='number of encoder layers')
     parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
+    parser.add_argument('--timestamp', type=int, default=0, help='add additional timestamp feature or not')
     
     
     return parser.parse_args()
@@ -127,9 +128,9 @@ if __name__ == '__main__':
     y_val = y_val[:,:,feature_idx]
     x_test = x_test[:,:,feature_idx]
     y_test = y_test[:,:,feature_idx]
-    train_data = FoVDataset(x_train, y_train, feature_idx)
-    val_data = FoVDataset(x_val, y_val, feature_idx)
-    test_data = FoVDataset(x_test, y_test, feature_idx)
+    train_data = FoVDataset(x_train, y_train, feature_idx, timestamp=args.timestamp)
+    val_data = FoVDataset(x_val, y_val, feature_idx, timestamp=args.timestamp)
+    test_data = FoVDataset(x_test, y_test, feature_idx, timestamp=args.timestamp)
     train_dataloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     val_dataloader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
     test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
@@ -176,7 +177,7 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.PatchTST import PatchTST
         model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model = args.dim_val,\
+                    d_model = FEATURE_SIZE,\
                     norm = False).float().to(DEVICE)
     elif model_name == 'Reformer':
         from reformer_pytorch import Reformer
@@ -221,7 +222,9 @@ if __name__ == '__main__':
         print(f'Epoch #{epoch}')
         epoch_start_time = time.time()
         train_result_path = f'{saved_path}/train_{epoch}_result.png'
-        train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, train_dataloader, optimizer, scheduler, step, feature_names, plot_flag=True if epoch % 2 == 1 else False)
+        train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, \
+                            train_dataloader, optimizer, scheduler, step, feature_names, \
+                                plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
     #     print(train_loss)
         train_mse_losses.append(train_loss)
         sep_train_mse_losses.append(sep_train_loss)

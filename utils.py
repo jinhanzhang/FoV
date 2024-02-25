@@ -14,11 +14,19 @@ import time
 import wandb
 
 class FoVDataset(Dataset):
-    def __init__(self, x_data, y_data, feature_idx):
+    def __init__(self, x_data, y_data, feature_idx, timestamp=False):
         self.feature_idx = feature_idx
         self.x_data = x_data[:,:,feature_idx]
         self.y_data = y_data[:,:,feature_idx]
-
+        if timestamp:
+            bs, input_temporal_dim, input_feature_dim = self.x_data.shape
+            bs, output_temporal_dim, output_feature_dim = self.y_data.shape
+            timestamp_input = np.concatenate(([ np.arange(input_temporal_dim).reshape(-1,1)[np.newaxis]  \
+                    for bs in range(bs)])).astype('float32')
+            timestamp_output = np.concatenate(([np.arange(input_temporal_dim, input_temporal_dim+output_temporal_dim).reshape(-1,1)[np.newaxis]  \
+                    for bs in range(bs)])).astype('float32')
+            self.x_data = np.concatenate((self.x_data, timestamp_input),axis=-1)
+            self.y_data = np.concatenate((self.y_data, timestamp_output),axis=-1)
     def __len__(self):
         return len(self.x_data)
 
@@ -122,7 +130,8 @@ def my_loss(output, target, feature_names):
     return mse_loss, pearsonr
 
 
-def train(device, result_path, model: nn.Module, data_loader, optimizer, scheduler, step, feature_names, plot_flag = False):
+def train(device, result_path, model: nn.Module, data_loader, optimizer, scheduler, step, \
+            feature_names, plot_flag = False, timestamp=False):
     progress_bar = tqdm(data_loader)
     model.train() # turn on train mode
     feature_size = len(feature_names)
@@ -132,7 +141,7 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
     start_time = time.time()
     total_loss = 0.
     return_loss = 0.
-    sep_return_loss = np.zeros((1,feature_size))
+    sep_return_loss = np.zeros((1,feature_size if timestamp==False else feature_size+1))
     loss_dict_train = {}
     for batch_idx, (data, targets) in enumerate(progress_bar):
 #         print("batch index: ", batch_idx)
