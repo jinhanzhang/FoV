@@ -1,1 +1,1 @@
-rsync -avzh --exclude={'checkpoints/','checkpoints','processed_data/','processed_data','saved_results','models','time_series_lib'} greene:/scratch/xc1490/projects/FoV/* .
+rsync -avzh --exclude={'checkpoints/','checkpoints','processed_data/','processed_data','saved_results','models','examples','time_series_lib'} greene:/scratch/xc1490/projects/FoV/* .
