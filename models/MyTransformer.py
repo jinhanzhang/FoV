@@ -183,6 +183,7 @@ class Transformer(torch.nn.Module):
 #         )
         self.out_fc = nn.Linear(dim_val, feature_size)
         self.final_activation = F.elu
+        self.out_seq_fc = nn.Linear(in_seq_len, out_seq_len)
         
     def make_trg_mask(self, N, trg_len):
         trg_mask = torch.tril(torch.ones((trg_len, trg_len))).expand(
@@ -191,11 +192,11 @@ class Transformer(torch.nn.Module):
         return trg_mask.to(self.device)
     
     def forward(self, x, target=None):
-        # x: [N, enc_seq_len, feature_size] = [N, 120, 3]
+        # x: [N, in_seq_len, feature_size] = [N, 120, 3]
         # dec_input = [N, dec_seq_len, feature_size]
         
         # MLP
-        mlp = self.enc_input_fc(x) # [N, enc_seq_len, dim_val]
+        mlp = self.enc_input_fc(x) # [N, in_seq_len, dim_val]
         #encoder
         #print ('mlp',mlp)
 #         mlp = x
@@ -206,12 +207,16 @@ class Transformer(torch.nn.Module):
             e = self.encs[0]( mlp )
             #print ('no pe',e)
         for enc in self.encs[1:]:
-            e = enc(e) # [N, enc_seq_len, dim_val]
+            e = enc(e) # [N, in_seq_len, dim_val]
         #print ('e',e)
 #         out = e
         #decoder
-        out = self.out_fc(e) # [N, enc_seq_len, feature_size]
-        #print ('out',out)
+        out = self.out_fc(e) # [N, in_seq_len, feature_size]
+        if self.in_seq_len != self.out_seq_len:
+            out = out.permute(0, 2, 1) # [N, feature_size, in_seq_len]
+            out = self.out_seq_fc(out)
+            out = out.permute(0, 2, 1) # [N, out_seq_len, feature_size]
+        #print ('out',out) 
         #out = self.final_activation(out)
         #import pdb;pdb.set_trace()
         return out

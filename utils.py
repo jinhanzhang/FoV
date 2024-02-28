@@ -38,22 +38,24 @@ class FoVDataset(Dataset):
     
 # visualize data, target, and prediction
 def visualize_data(path, data, target, prediction=None):
-    batch_size, seq_len, feature_size = data.shape
+    batch_size, in_seq_len, feature_size = data.shape
+    _, out_seq_len, _ = target.shape
     rand_batch = random.randint(0, batch_size-1)
     rand_data = data[rand_batch]
     rand_target = target[rand_batch]
     if prediction is not None:
         rand_pred = prediction[rand_batch]
-    x = np.arange(seq_len)
+    x = np.arange(out_seq_len)
     plt.figure()
     #import pdb;pdb.set_trace()
     if feature_size<=3:
         fig, ax = plt.subplots(1, feature_size, figsize=(feature_size*4,4))
+        ax = [ax] if feature_size==1 else ax
         for i in range(feature_size):
             ax[i].plot(rand_data[:,i])
-            ax[i].plot(x+seq_len, rand_target[:,i])
+            ax[i].plot(x+in_seq_len, rand_target[:,i])
             if prediction is not None:
-                ax[i].plot(x+seq_len, rand_pred[:,i])
+                ax[i].plot(x+in_seq_len, rand_pred[:,i])
     else:
         rows = (feature_size-1)//3+1
         fig, ax = plt.subplots(rows, 3, figsize=(12,4*rows))
@@ -61,9 +63,9 @@ def visualize_data(path, data, target, prediction=None):
             for j in range(3):
                 if i*3+j<feature_size:
                     ax[i][j].plot(rand_data[:,3*i+j])
-                    ax[i][j].plot(x+seq_len, rand_target[:,3*i+j])
+                    ax[i][j].plot(x+in_seq_len, rand_target[:,3*i+j])
                     if prediction is not None:
-                        ax[i][j].plot(x+seq_len,rand_pred[:,3*i+j])
+                        ax[i][j].plot(x+in_seq_len,rand_pred[:,3*i+j])
     if prediction is None:
         fig.legend(["data","target"])
     else:

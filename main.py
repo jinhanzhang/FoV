@@ -17,13 +17,11 @@ from ast import arg, parse
 import random
 from datetime import datetime
 import numpy as np
-import glob
-import math
+import json
 import matplotlib.pyplot as plt
 import scipy.io
 from scipy import stats
 import os
-import copy
 import time
 import torch
 from torch import nn, Tensor
@@ -58,11 +56,12 @@ def parse_option():
     # transformer config
     parser.add_argument('--n_heads', type=int, default=3, help='number of heads')
     parser.add_argument('--head_dim', type=int, default=3, help='head dimension')
-    parser.add_argument('--dim_val', type=int, default=9, help='embedding dimension')
+    # parser.add_argument('--dim_val', type=int, default=9, help='embedding dimension')
     parser.add_argument('--n_decoder_layers', type=int, default=2, help='number of decoder layers')
     parser.add_argument('--n_encoder_layers', type=int, default=2, help='number of encoder layers')
     parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
     parser.add_argument('--timestamp', type=int, default=0, help='add additional timestamp feature or not')
+    parser.add_argument('--num_epochs', type=int, default=100, help='number of epochs')
     
     
     return parser.parse_args()
@@ -73,7 +72,7 @@ if __name__ == '__main__':
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
-    id = datetime.now().strftime("%m/%d/%Y-%H:%M:%S")
+    id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
     saved_path = f'saved_results/{id}'
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
@@ -109,6 +108,7 @@ if __name__ == '__main__':
     if args.timestamp:
         FEATURE_SIZE += 1
     BATCH_SIZE = args.batch_size
+    EPOCHS = args.num_epochs
     LOAD_MODEL = args.load_model
     
     # load data
@@ -121,11 +121,30 @@ if __name__ == '__main__':
     y_test = np.loadtxt(f'{processed_data_path}/y_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
     mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
     
+    # synthetic data
+    a = random.randint(0, 9)
+    b = random.randint(0, 9)
+    c = random.randint(0, 9)
+    sequence1 = np.linspace(a, a+3, 10000).astype('f')
+    sequence2 = np.linspace(b, b+6, 10000).astype('f')
+    sequence3 = np.linspace(c, c+9, 10000).astype('f')
+    combined_sequence = np.column_stack((sequence1, sequence2, sequence3))
+    x = []
+    y = []
+    for i in range(0,1000,8):
+        x.append(combined_sequence[i:i+120])
+        y.append(combined_sequence[i+120:i+240])
+    x = np.array(x)
+    y = np.array(y)
+    print(x.shape, y.shape, x.dtype, y.dtype)
+    
     # create dataset and dataloader
     feature_names = FEATURE_NAMES
     feature_idx = FEATURE_INDEX
     x_train = x_train[:,:,feature_idx]
     y_train = y_train[:,:,feature_idx]
+    x_train = x
+    y_train = y
     x_val = x_val[:,:,feature_idx]
     y_val = y_val[:,:,feature_idx]
     x_test = x_test[:,:,feature_idx]
@@ -144,7 +163,7 @@ if __name__ == '__main__':
     feature_size = FEATURE_SIZE
     lr = 0.005
     tf_rate = 0.5
-    epochs = 200
+    epochs = EPOCHS
     batch_size = BATCH_SIZE
     n_batches = len(train_dataloader)
     use_wandb = args.use_wandb
@@ -154,7 +173,7 @@ if __name__ == '__main__':
         from models.MyTransformer import Transformer
         n_heads = args.n_heads ##4
         head_dim = args.head_dim #32 # dimension of each head, not total
-        dim_val = args.dim_val #16#n_heads*head_dim # embedding dimension, all heads together
+        dim_val =  n_heads*head_dim # embedding dimension, all heads together
         n_decoder_layers = args.n_decoder_layers
         n_encoder_layers = args.n_encoder_layers
         pe_mode = args.pe_mode
@@ -210,7 +229,25 @@ if __name__ == '__main__':
     val_pearsonr_arr = []
     test_pearsonr_arr = []
     
-    # Trainig
+    # save the config to result
+    config = {
+        "model": model_name,
+        "history_time": HISTORY_TIME,
+        "prediction_time": PREDICTION_TIME,
+        "batch_size": BATCH_SIZE,
+        "feature_names": FEATURE_NAMES,
+        "n_heads": n_heads,
+        "head_dim": head_dim,
+        "dim_val": dim_val,
+        "n_decoder_layers": n_decoder_layers,
+        "n_encoder_layers": n_encoder_layers,
+        "pe_mode": pe_mode,
+        "num_epochs": epochs
+    }
+    with open(f'{saved_path}/config.json', 'w') as f:
+        json.dump(config, f)
+    
+    # Training
     use_wandb = args.use_wandb
     if LOAD_MODEL:
         load_ckpt(f"{PROJECT_PATH}/checkpoints/batch_{BATCH_SIZE}_{HISTORY_TIME}_{PREDICTION_TIME}_ckpts.pt".format(os.getcwd(), epochs, batch_size), model, optimizer)
