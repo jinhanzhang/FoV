@@ -36,7 +36,7 @@ import sys
 import wandb
 wandb.__version__
 from utils import *
-# from dataloader import
+from dataloader.generate_data import *
 
 
 
@@ -62,7 +62,8 @@ def parse_option():
     parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
     parser.add_argument('--timestamp', type=int, default=0, help='add additional timestamp feature or not')
     parser.add_argument('--num_epochs', type=int, default=100, help='number of epochs')
-    
+    parser.add_argument('--load_data', type=bool, default=False, help='load data or genearate data from dataset')
+    parser.add_argument('--train_len', type=int, default=1000, help='train random data length')
     
     return parser.parse_args()
     
@@ -110,46 +111,55 @@ if __name__ == '__main__':
     BATCH_SIZE = args.batch_size
     EPOCHS = args.num_epochs
     LOAD_MODEL = args.load_model
+    TRAIN_LEN = args.train_len
     
     # load data
     processed_data_path = f'{PROJECT_PATH}/processed_data'
-    x_train = np.loadtxt(f'{processed_data_path}/x_train_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
-    y_train = np.loadtxt(f'{processed_data_path}/y_train_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
-    x_val = np.loadtxt(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
-    y_val = np.loadtxt(f'{processed_data_path}/y_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
-    x_test = np.loadtxt(f'{processed_data_path}/x_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
-    y_test = np.loadtxt(f'{processed_data_path}/y_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
-    mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
-    
+    processed_long_sequence_path = f'{PROJECT_PATH}/processed_long_sequence'
+    dataset_path = f'{PROJECT_PATH}/dataset'
+    if args.load_data is True and os.path.isfile(f'{PROJECT_PATH}/processed_data/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv'):
+        print("load data")
+        
+        # read val and test processed data
+        x_val = np.loadtxt(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
+        y_val = np.loadtxt(f'{processed_data_path}/y_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
+        x_test = np.loadtxt(f'{processed_data_path}/x_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
+        y_test = np.loadtxt(f'{processed_data_path}/y_test_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
+        mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
+    else:
+        # generate val and test data from dataset
+        _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE)
+        print("generate data: ", x_val.shape, y_val.shape, x_test.shape, y_test.shape, mean_std.shape)
+        
     # synthetic data
-    a = random.randint(0, 9)
-    b = random.randint(0, 9)
-    c = random.randint(0, 9)
-    sequence1 = np.linspace(a, a+3, 10000).astype('f')
-    sequence2 = np.linspace(b, b+6, 10000).astype('f')
-    sequence3 = np.linspace(c, c+9, 10000).astype('f')
-    combined_sequence = np.column_stack((sequence1, sequence2, sequence3))
-    x = []
-    y = []
-    for i in range(0,1000,8):
-        x.append(combined_sequence[i:i+120])
-        y.append(combined_sequence[i+120:i+240])
-    x = np.array(x)
-    y = np.array(y)
-    print(x.shape, y.shape, x.dtype, y.dtype)
+    # a = random.randint(0, 9)
+    # b = random.randint(0, 9)
+    # c = random.randint(0, 9)
+    # sequence1 = np.linspace(a, a+3, 10000).astype('f')
+    # sequence2 = np.linspace(b, b+6, 10000).astype('f')
+    # sequence3 = np.linspace(c, c+9, 10000).astype('f')
+    # combined_sequence = np.column_stack((sequence1, sequence2, sequence3))
+    # x = []
+    # y = []
+    # for i in range(0,1000,8):
+    #     x.append(combined_sequence[i:i+120])
+    #     y.append(combined_sequence[i+120:i+240])
+    # x = np.array(x)
+    # y = np.array(y)
+    # print(x.shape, y.shape, x.dtype, y.dtype)
     
     # create dataset and dataloader
     feature_names = FEATURE_NAMES
     feature_idx = FEATURE_INDEX
-    x_train = x_train[:,:,feature_idx]
-    y_train = y_train[:,:,feature_idx]
-    x_train = x
-    y_train = y
+    # x_train = x_train[:,:,feature_idx]
+    # y_train = y_train[:,:,feature_idx]
     x_val = x_val[:,:,feature_idx]
     y_val = y_val[:,:,feature_idx]
     x_test = x_test[:,:,feature_idx]
     y_test = y_test[:,:,feature_idx]
-    train_data = FoVDataset(x_train, y_train, feature_idx, timestamp=args.timestamp)
+    # train_data = FoVDataset(x_train, y_train, feature_idx, timestamp=args.timestamp)
+    train_data = FoVTrainDataset(dataset_path, processed_long_sequence_path, feature_idx, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE, TRAIN_LEN, timestamp=args.timestamp)
+    print("train_data len: ", len(train_data))
     val_data = FoVDataset(x_val, y_val, feature_idx, timestamp=args.timestamp)
     test_data = FoVDataset(x_test, y_test, feature_idx, timestamp=args.timestamp)
     train_dataloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)

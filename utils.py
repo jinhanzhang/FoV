@@ -12,6 +12,7 @@ from scipy import stats
 from tqdm import tqdm
 import time
 import wandb
+from dataloader.generate_data import *
 
 class FoVDataset(Dataset):
     def __init__(self, x_data, y_data, feature_idx, timestamp=False):
@@ -33,6 +34,33 @@ class FoVDataset(Dataset):
     def __getitem__(self, idx):
         x = torch.tensor(self.x_data[idx])
         y = torch.tensor(self.y_data[idx])
+        return x,y
+    
+class FoVTrainDataset(Dataset):
+    def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False):
+        self.feature_idx = feature_idx
+        self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
+        self.hist_length = hist_time*frame_rate
+        self.pred_length = pred_time*frame_rate
+        self.total_length = self.hist_length + self.pred_length
+        self.timestamp = timestamp
+        self.train_len = train_len
+        # check if processed data exists
+        if len(self.train_files) == 0:
+            createAndSaveLongSequence(data_path,processed_long_sequence_path, hist_time, pred_time, frame_rate)
+            self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
+        
+    def __len__(self):
+        return self.train_len
+    
+    def __getitem__(self, idx):
+        file_idx = random.randint(0, len(self.train_files)-1)
+        file = self.train_files[file_idx]
+        df = pd.read_csv(file, dtype=np.float32)
+        start_idx = random.randint(0, len(df)-self.total_length)
+        
+        x = torch.tensor(df.iloc[start_idx:start_idx+self.hist_length,self.feature_idx].values)
+        y = torch.tensor(df.iloc[start_idx+self.hist_length:start_idx+self.hist_length+self.pred_length,self.feature_idx].values)
         return x,y
     
     
