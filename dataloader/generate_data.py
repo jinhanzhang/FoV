@@ -44,8 +44,8 @@ def createDataframe(f):
 def multivariate_data(df, history_time = 10, target_time = 10, step = 15, window_size=60):
     data = []
     labels = []
-    start_index = history_time * window_size
-    end_index = len(df) - target_time * window_size
+    start_index = int(history_time * window_size)
+    end_index = int(len(df) - target_time * window_size)
 
     for i in range(start_index, end_index, step):
         indices = range(i-history_time * window_size, i)
@@ -60,10 +60,12 @@ def normalizeData(files, history_time = 10, target_time = 10, window_size=60):
     concatenatedDf = pd.DataFrame()
     for f in files:
         df = createDataframe(f)
+        #print ('f',f, df.columns)
         if len(df) < (history_time + target_time) * (window_size):
             continue
-        concatenatedDf = pd.concat([concatenatedDf, df], axis=0)
         
+        concatenatedDf = pd.concat([concatenatedDf, df], axis=0)
+    print ('concatenatedDf.shape, concatenatedDf.columns', concatenatedDf.shape, concatenatedDf.columns)
     HeadX_mean = concatenatedDf['HeadX'].mean()
     HeadY_mean = concatenatedDf['HeadY'].mean()
     HeadZ_mean = concatenatedDf['HeadZ'].mean()
@@ -77,7 +79,7 @@ def normalizeData(files, history_time = 10, target_time = 10, window_size=60):
 def createSequence(files, history_time=10, target_time=10, step=15, window_size=60):
     x_list = []
     y_list = []
-
+    
     HeadX_mean, HeadY_mean, HeadZ_mean, HeadX_std, HeadY_std, HeadZ_std = normalizeData(files, history_time, target_time, window_size)
     mean_std = np.array([HeadX_mean, HeadY_mean, HeadZ_mean, HeadX_std, HeadY_std, HeadZ_std])
     for f in files:
