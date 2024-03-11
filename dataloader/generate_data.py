@@ -1,4 +1,5 @@
 import glob
+from tracemalloc import start
 import numpy as np
 import pandas as pd
 import os
@@ -44,13 +45,13 @@ def createDataframe(f):
 def multivariate_data(df, history_time = 10, target_time = 10, step = 15, window_size=60):
     data = []
     labels = []
-    start_index = history_time * window_size
-    end_index = len(df) - target_time * window_size
+    start_index = int(history_time * window_size)
+    end_index = int(len(df) - target_time * window_size)
 
     for i in range(start_index, end_index, step):
-        indices = range(i-history_time * window_size, i)
+        indices = range(i-int(history_time * window_size), i)
         data.append(df.iloc[indices])
-        labels.append(df.iloc[i:i+target_time * window_size])
+        labels.append(df.iloc[i:i+int(target_time * window_size)])
 
     return np.array(data), np.array(labels)
 
@@ -60,7 +61,7 @@ def normalizeData(files, history_time = 10, target_time = 10, window_size=60):
     concatenatedDf = pd.DataFrame()
     for f in files:
         df = createDataframe(f)
-        if len(df) < (history_time + target_time) * (window_size):
+        if len(df) < int((history_time + target_time) * (window_size)):
             continue
         concatenatedDf = pd.concat([concatenatedDf, df], axis=0)
         
@@ -83,7 +84,7 @@ def createSequence(files, history_time=10, target_time=10, step=15, window_size=
     for f in files:
         df = createDataframe(f)
         len(df)
-        if len(df) < (history_time + target_time) * (window_size):
+        if len(df) < int((history_time + target_time) * (window_size)):
             continue
         df['HeadX'] = (df['HeadX'] - HeadX_mean) / HeadX_std
         df['HeadY'] = (df['HeadY'] - HeadY_mean) / HeadY_std
@@ -110,7 +111,7 @@ def createAndSaveLongSequence(data_path, save_path, history_time = 10, target_ti
         # print(file_name)
         df = createDataframe(f)
         len(df)
-        if len(df) < (history_time + target_time) * (window_size):
+        if len(df) < int((history_time + target_time) * (window_size)):
             continue
         df['HeadX'] = (df['HeadX'] - HeadX_mean) / HeadX_std
         df['HeadY'] = (df['HeadY'] - HeadY_mean) / HeadY_std
