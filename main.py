@@ -56,7 +56,7 @@ def parse_option():
     # transformer config
     parser.add_argument('--n_heads', type=int, default=3, help='number of heads')
     parser.add_argument('--head_dim', type=int, default=3, help='head dimension')
-    # parser.add_argument('--dim_val', type=int, default=9, help='embedding dimension')
+    parser.add_argument('--d_model', type=int, default=9, help='embedding dimension for time series lib')
     parser.add_argument('--n_decoder_layers', type=int, default=2, help='number of decoder layers')
     parser.add_argument('--n_encoder_layers', type=int, default=2, help='number of encoder layers')
     parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
@@ -193,14 +193,14 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.iTransformer import iTransformer
         model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model = args.dim_val,\
+                    d_model = args.d_model,\
                     norm = False).float().to(DEVICE)
     elif model_name == 'TimesNet':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.TimesNet import TimesNet
         model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model =args.dim_val, c_out = FEATURE_SIZE, \
+                    d_model =args.d_model, c_out = FEATURE_SIZE, \
                     norm = False).float().to(DEVICE)
     elif model_name == 'PatchTST':
         #TODO: feature dimension issue, PE error
