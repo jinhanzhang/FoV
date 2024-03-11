@@ -162,4 +162,5 @@ cython_debug/
 /run
 /wandb
 /processed_data
+/dataset
 /checkpoints
