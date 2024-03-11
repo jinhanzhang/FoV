@@ -40,9 +40,9 @@ class FoVTrainDataset(Dataset):
     def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False):
         self.feature_idx = feature_idx
         self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
-        self.hist_length = hist_time*frame_rate
-        self.pred_length = pred_time*frame_rate
-        self.total_length = self.hist_length + self.pred_length
+        self.hist_length = int(hist_time*frame_rate)
+        self.pred_length = int(pred_time*frame_rate)
+        self.total_length = int(self.hist_length + self.pred_length)
         self.timestamp = timestamp
         self.train_len = train_len
         # check if processed data exists
