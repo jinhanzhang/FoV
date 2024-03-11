@@ -47,8 +47,8 @@ def parse_option():
                         help='model name, options: [Autoformer, Transformer, iTransformer, Reformer, TimesNet, PatchTST]')
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
-    parser.add_argument('--hist_time', type=int, default=2, help='history data time')
-    parser.add_argument('--pred_time', type=int, default=1, help='prediction data time')
+    parser.add_argument('--hist_time', type=float, default=2, help='history data time')
+    parser.add_argument('--pred_time', type=float, default=1, help='prediction data time')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('--feature_names', type=str, default='XYZ_FEATURE_NAMES', help='[DEFAULT_FEATURE_NAMES, XYZ_FEATURE_NAMES, ONE_FEATURE, SC_FEATURE_NAMES, RPY_FEATURE_NAMES, ANGLE_FEATURE_NAMES]')
     parser.add_argument('--load_model', type=bool, default=False, help='load model')
@@ -87,8 +87,8 @@ if __name__ == '__main__':
     MAX_PREDICTION_TIME = 10
     HISTORY_TIME = args.hist_time
     PREDICTION_TIME = args.pred_time
-    HISTORY_LENGTH = HISTORY_TIME*FRAME_RATE
-    PREDICTION_LENGTH = PREDICTION_TIME*FRAME_RATE
+    HISTORY_LENGTH = int(HISTORY_TIME*FRAME_RATE)
+    PREDICTION_LENGTH = int(PREDICTION_TIME*FRAME_RATE)
     MAX_HISTORY_LENGTH = MAX_HISTORY_TIME*FRAME_RATE
     MAX_PREDICTION_LENGTH = MAX_PREDICTION_TIME*FRAME_RATE
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     dataset_path = f'{PROJECT_PATH}/dataset'
     if args.load_data is True and os.path.isfile(f'{PROJECT_PATH}/processed_data/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv'):
         print("load data")
-        
+
         # read val and test processed data
         x_val = np.loadtxt(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
         y_val = np.loadtxt(f'{processed_data_path}/y_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,PREDICTION_LENGTH,DEFAULT_FEATURE_SIZE))
