@@ -121,7 +121,7 @@ def createAndSaveLongSequence(data_path, save_path, history_time = 10, target_ti
         # print(df)
     return
 
-def generate_data(path, hist_time, pred_time,frame_rate):
+def generate_data(path, save_path, hist_time, pred_time,frame_rate):
     history_size,target_size = hist_time*frame_rate, pred_time*frame_rate
     test_files = glob.glob(path + '/ChenYongting*.txt')
     val_files = glob.glob(path + '/fupingyu*.txt') + glob.glob(path + '/GuoYushan*.txt')
@@ -132,6 +132,14 @@ def generate_data(path, hist_time, pred_time,frame_rate):
     x_val,y_val, mean_std_val = createSequence(val_files,hist_time,pred_time,window_size=frame_rate)
     x_test,y_test, mean_std_test = createSequence(test_files,hist_time,pred_time,window_size=frame_rate)
     mean_std = np.concatenate((mean_std_train, mean_std_val,mean_std_test))
+    # save to processed data
+    np.savetxt(f'{save_path}/x_train_{hist_time}_{pred_time}.csv', x_train.reshape((x_train.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/y_train_{hist_time}_{pred_time}.csv', y_train.reshape((y_train.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/x_val_{hist_time}_{pred_time}.csv', x_val.reshape((x_val.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/y_val_{hist_time}_{pred_time}.csv', y_val.reshape((y_val.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/x_test_{hist_time}_{pred_time}.csv', x_test.reshape((x_test.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/y_test_{hist_time}_{pred_time}.csv', y_test.reshape((y_test.shape[0],-1)), delimiter=',')
+    np.savetxt(f'{save_path}/xyz_mean_std_{hist_time}_{pred_time}.csv',mean_std)
     return x_train, y_train, x_val,y_val,x_test,y_test,mean_std
 
 def generate_train_data(path, hist_time, pred_time,frame_rate):

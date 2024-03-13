@@ -128,7 +128,7 @@ if __name__ == '__main__':
         mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
     else:
         # generate val and test data from dataset
-        _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE)
+        _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, processed_data_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE)
         print("generate data: ", x_val.shape, y_val.shape, x_test.shape, y_test.shape, mean_std.shape)
         
     # synthetic data
