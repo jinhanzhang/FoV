@@ -192,6 +192,7 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.iTransformer import iTransformer
+        n_heads = args.d_model
         model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model = args.d_model,\
                     norm = False).float().to(DEVICE)
@@ -199,6 +200,7 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.TimesNet import TimesNet
+        n_heads = args.d_model
         model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model =args.d_model, c_out = FEATURE_SIZE, \
                     norm = False).float().to(DEVICE)
@@ -207,11 +209,13 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.PatchTST import PatchTST
+        n_heads = args.d_model
         model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model = FEATURE_SIZE,\
                     norm = False).float().to(DEVICE)
     elif model_name == 'Reformer':
         from reformer_pytorch import Reformer
+        n_heads = args.n_heads
         model = Reformer(
             dim = FEATURE_SIZE,
             depth = args.n_encoder_layers,

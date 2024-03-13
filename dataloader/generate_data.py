@@ -48,9 +48,9 @@ def multivariate_data(df, history_time = 10, target_time = 10, step = 15, window
     end_index = int(len(df) - target_time * window_size)
 
     for i in range(start_index, end_index, step):
-        indices = range(i-history_time * window_size, i)
+        indices = range(i-int(history_time * window_size), i)
         data.append(df.iloc[indices])
-        labels.append(df.iloc[i:i+target_time * window_size])
+        labels.append(df.iloc[i:i+int(target_time * window_size)])
 
     return np.array(data), np.array(labels)
 
