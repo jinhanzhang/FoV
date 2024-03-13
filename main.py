@@ -178,7 +178,17 @@ if __name__ == '__main__':
     n_batches = len(train_dataloader)
     use_wandb = args.use_wandb
     # init model
+    
     model_name = args.model
+    config = {
+        "model": model_name,
+        "history_time": HISTORY_TIME,
+        "prediction_time": PREDICTION_TIME,
+        "batch_size": BATCH_SIZE,
+        "feature_names": FEATURE_NAMES,
+        "num_epochs": epochs
+    }
+    
     if model_name == 'MyTransformer':
         from models.MyTransformer import Transformer
         n_heads = args.n_heads ##4
@@ -188,31 +198,44 @@ if __name__ == '__main__':
         n_encoder_layers = args.n_encoder_layers
         pe_mode = args.pe_mode
         model = Transformer(n_heads, head_dim, feature_size, in_seq_len, out_seq_len, n_encoder_layers, n_decoder_layers, pe_mode, device=DEVICE).to(device=DEVICE)
+        additional_config = {"n_heads": n_heads,
+        "head_dim": head_dim,
+        "dim_val": dim_val,
+        "n_decoder_layers": n_decoder_layers,
+        "n_encoder_layers": n_encoder_layers,
+        "pe_mode": pe_mode}
+        config.update(additional_config)
     elif model_name == 'iTransformer':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.iTransformer import iTransformer
-        n_heads = args.d_model
         model = iTransformer(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model = args.d_model,\
                     norm = False).float().to(DEVICE)
+        additional_config = {"d_model": args.d_model
+        }
+        config.update(additional_config)
     elif model_name == 'TimesNet':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.TimesNet import TimesNet
-        n_heads = args.d_model
         model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model =args.d_model, c_out = FEATURE_SIZE, \
                     norm = False).float().to(DEVICE)
+        additional_config = {"d_model": args.d_model
+        }
+        config.update(additional_config)
     elif model_name == 'PatchTST':
         #TODO: feature dimension issue, PE error
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.PatchTST import PatchTST
-        n_heads = args.d_model
         model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
                     d_model = FEATURE_SIZE,\
                     norm = False).float().to(DEVICE)
+        additional_config = {"d_model": args.d_model
+        }
+        config.update(additional_config)
     elif model_name == 'Reformer':
         from reformer_pytorch import Reformer
         n_heads = args.n_heads
@@ -224,7 +247,10 @@ if __name__ == '__main__':
             bucket_size = 60,
             causal = False
         ).to(device=DEVICE).requires_grad_(True)
-    
+        additional_config = {"n_heads": args.n_heads,
+                             "n_encoder_layers": args.n_encoder_layers,
+        }
+        config.update(additional_config)
     else:
         print("Model not found")
         sys.exit(0)
@@ -244,20 +270,7 @@ if __name__ == '__main__':
     test_pearsonr_arr = []
     
     # save the config to result
-    config = {
-        "model": model_name,
-        "history_time": HISTORY_TIME,
-        "prediction_time": PREDICTION_TIME,
-        "batch_size": BATCH_SIZE,
-        "feature_names": FEATURE_NAMES,
-        "n_heads": n_heads,
-        "head_dim": head_dim,
-        "dim_val": dim_val,
-        "n_decoder_layers": n_decoder_layers,
-        "n_encoder_layers": n_encoder_layers,
-        "pe_mode": pe_mode,
-        "num_epochs": epochs
-    }
+    
     with open(f'{saved_path}/config.json', 'w') as f:
         json.dump(config, f)
     
