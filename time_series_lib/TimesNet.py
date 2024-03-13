@@ -55,6 +55,7 @@ class TimesBlock(nn.Module):
                 length = (self.seq_len + self.pred_len)
                 out = x
             # reshape
+            #import pdb;pdb.set_trace()
             out = out.reshape(B, length // period, period,
                               N).permute(0, 3, 1, 2).contiguous()
             # 2D conv: from 1d Variation to 2d Variation
@@ -88,7 +89,7 @@ class TimesNet(nn.Module):
         self.label_len =  label_len
         self.pred_len =  pred_len
         self.norm = norm
-        self.model = nn.ModuleList([TimesBlock(seq_len=seq_len, pred_len=0, \
+        self.model = nn.ModuleList([TimesBlock(seq_len=seq_len, pred_len=pred_len, \
                                                top_k=top_k, d_model=d_model, d_ff=d_ff, num_kernels=num_kernels)
                                     for _ in range( e_layers)])
         self.enc_embedding = DataEmbedding_wo_pos( enc_in,  d_model,  embed,  freq,
@@ -97,7 +98,7 @@ class TimesNet(nn.Module):
         self.layer_norm = nn.LayerNorm( d_model)
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.predict_linear = nn.Linear(
-                self.seq_len, self.pred_len  )
+                self.seq_len, self.seq_len+self.pred_len  )
             self.projection = nn.Linear(
                  d_model,  c_out, bias=True)
         if self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
@@ -224,7 +225,7 @@ class TimesNet(nn.Module):
     def forward(self, x_enc, x_mark_enc=None, x_dec=None, x_mark_dec=None, mask=None,debug=False,norm=False):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,debug=debug,norm=norm)
-            return dec_out#[:, -self.pred_len:, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(
                 x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

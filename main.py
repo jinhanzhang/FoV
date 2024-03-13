@@ -61,8 +61,8 @@ def parse_option():
     parser.add_argument('--n_encoder_layers', type=int, default=2, help='number of encoder layers')
     parser.add_argument('--pe_mode', type=str, default='standard', help='positional encoding mode')
     parser.add_argument('--timestamp', type=int, default=0, help='add additional timestamp feature or not')
-    parser.add_argument('--num_epochs', type=int, default=100, help='number of epochs')
-    parser.add_argument('--load_data', type=bool, default=False, help='load data or genearate data from dataset')
+    parser.add_argument('--num_epochs', type=int, default=1000, help='number of epochs')
+    parser.add_argument('--load_data', type=bool, default=True, help='load data or genearate data from dataset')
     parser.add_argument('--train_len', type=int, default=1000, help='train random data length')
     
     return parser.parse_args()
@@ -73,12 +73,14 @@ if __name__ == '__main__':
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
-    id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
-    saved_path = f'saved_results/{id}'
+    #id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+    args = parse_option()
+    saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_\
+                        bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}'
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
     # parse augments
-    args = parse_option()
+    
     
     # config
     PROJECT_PATH = args.root_path
@@ -117,8 +119,9 @@ if __name__ == '__main__':
     processed_data_path = f'{PROJECT_PATH}/processed_data'
     processed_long_sequence_path = f'{PROJECT_PATH}/processed_long_sequence'
     dataset_path = f'{PROJECT_PATH}/dataset'
+    #import pdb; pdb.set_trace()
     if args.load_data is True and os.path.isfile(f'{PROJECT_PATH}/processed_data/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv'):
-        print("load data")
+        print("load data from stored files")
 
         # read val and test processed data
         x_val = np.loadtxt(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((-1,HISTORY_LENGTH,DEFAULT_FEATURE_SIZE))
@@ -128,6 +131,7 @@ if __name__ == '__main__':
         mean_std = np.loadtxt(f'{processed_data_path}/xyz_mean_std_{HISTORY_TIME}_{PREDICTION_TIME}.csv', dtype='float32', delimiter=',').reshape((3, -1))
     else:
         # generate val and test data from dataset
+        print ('generate from scratch')
         _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, processed_data_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE)
         print("generate data: ", x_val.shape, y_val.shape, x_test.shape, y_test.shape, mean_std.shape)
         
@@ -219,9 +223,11 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main/')
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.TimesNet import TimesNet
+        print ('in_seq_len',in_seq_len, 'out_seq_len', out_seq_len, 'FEATURE_SIZE', FEATURE_SIZE)
         model = TimesNet(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model =args.d_model, c_out = FEATURE_SIZE, \
+                    d_model =8, c_out = FEATURE_SIZE, \
                     norm = False).float().to(DEVICE)
+        #import pdb; pdb.set_trace()
         additional_config = {"d_model": args.d_model
         }
         config.update(additional_config)
@@ -231,7 +237,7 @@ if __name__ == '__main__':
         sys.path.append('Time-Series-Library-main')
         from time_series_lib.PatchTST import PatchTST
         model = PatchTST(seq_len = in_seq_len, pred_len = out_seq_len, enc_in = FEATURE_SIZE, \
-                    d_model = FEATURE_SIZE,\
+                    d_model = 8,\
                     norm = False).float().to(DEVICE)
         additional_config = {"d_model": args.d_model
         }
@@ -290,17 +296,21 @@ if __name__ == '__main__':
         train_result_path = f'{saved_path}/train_{epoch}_result.png'
         train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, \
                             train_dataloader, optimizer, scheduler, step, feature_names, \
-                                plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
+                                plot_flag=True if epoch % 10 == 1 else False, timestamp=args.timestamp)
     #     print(train_loss)
         train_mse_losses.append(train_loss)
         sep_train_mse_losses.append(sep_train_loss)
         mean_loss = sum(train_mse_losses)/len(train_mse_losses)
         val_result_path = f'{saved_path}/val_{epoch}_result.png'
-        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, val_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
+        val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, \
+                            val_dataloader, feature_names, plot_flag=True if epoch % 10 == 1 else False,\
+                                timestamp=args.timestamp)
         val_mse_losses.append(val_loss)
         sep_val_mse_losses.append(sep_val_loss)
         test_result_path = f'{saved_path}/test_{epoch}_result.png'
-        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, test_dataloader, feature_names, plot_flag=True if epoch % 2 == 1 else False, timestamp=args.timestamp)
+        test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, \
+                            test_dataloader, feature_names, plot_flag=True if epoch % 10 == 1 else False,\
+                                timestamp=args.timestamp)
         test_mse_losses.append(test_loss)
         sep_test_mse_losses.append(sep_test_loss)
         elapsed = time.time() - epoch_start_time
