@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --job-name=fovMyTransformer
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=24GB
+#SBATCH --time=4:00:00
+#SBATCH --gres=gpu:1
+overlay_ext3=/home/xc1490/home/apps/ddsp.ext3
+singularity exec --nv \
+    --overlay ${overlay_ext3}:ro \
+    /scratch/work/public/singularity/cuda11.0-cudnn8-devel-ubuntu18.04.sif \
+    /bin/bash -c "
+source /ext3/env.sh
+cd /scratch/xc1490/projects/FoV/
+python main.py  --model MyTransformer --data_path processed_data --hist_time 2                         --pred_time 0.1 --batch_size 8 --feature_names XYZ_FEATURE_NAMES                         --n_heads 3 --head_dim 3 --d_model 9  --n_decoder_layers 2 --n_encoder_layers 2 --pe_mode standard                         --out_suffix 20240313 --num_epochs 1000"

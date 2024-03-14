@@ -13,7 +13,8 @@ from tqdm import tqdm
 import time
 import wandb
 from dataloader.generate_data import *
-
+from scipy.stats import pearsonr
+from sklearn.metrics import mean_squared_error
 class FoVDataset(Dataset):
     def __init__(self, x_data, y_data, feature_idx, timestamp=False):
         self.feature_idx = feature_idx
@@ -101,6 +102,51 @@ def visualize_data(path, data, target, prediction=None):
     plt.show()
     fig.savefig(path)
 
+def visualize_data_all(path, data, target, prediction=None,bs=100,text='train'):
+    batch_size, in_seq_len, feature_size = data.shape
+    _, out_seq_len, _ = target.shape
+    #rand_batch = random.randint(0, batch_size-1)
+    #rand_data = data[rand_batch]
+    #rand_target = target[rand_batch]
+    #if prediction is not None:
+    #    rand_pred = prediction[rand_batch]
+    #print ('start plot all',text)
+    x = np.arange(out_seq_len)
+    bs = min(bs,batch_size)
+    sample_nums = bs
+    for batch in range(bs // sample_nums):
+        start = batch * sample_nums
+        end = min(batch * sample_nums+sample_nums,bs)
+    
+        fig, ax = plt.subplots(sample_nums,3,figsize=(5*feature_size,4*sample_nums))
+        for j, sample_id in enumerate(np.arange(start, end)):
+            for i in range(feature_size):  
+                ax[j, i ].plot(np.arange(0,in_seq_len), data[sample_id,:,i ],label='input')
+                ax[j, i ].plot(np.arange(in_seq_len, in_seq_len+out_seq_len),target[sample_id,:,i ],label='target')
+                if prediction is not None:
+                    ax[j, i ].plot(np.arange(in_seq_len, in_seq_len+out_seq_len),prediction[sample_id,:,i ],label='prediction')
+                ax[j, i ].legend( )
+                #import pdb;pdb.set_trace()
+                cc = pearsonr(prediction[sample_id,:,i ],target[sample_id,:,i ])[0]
+                mse = mean_squared_error(prediction[sample_id,:,i ],target[sample_id,:,i ])
+                ax[j, i ].set_title('sample: {}, CC: {:.03f}, \n mse: {:.03f} feature: {}'.format(sample_id,cc,mse,['head_x','head_y','head_z','head_r_sin','head_r_cos','head_p_sin','head_p_cos','head_y_sin',\
+    'head_y_cos','head_rx','head_ry','head_rz'][i]))
+        if prediction is None:
+            fig.legend(["data","target"])
+        else:
+            fig.legend(["data","target","pred"])
+        ccs = []
+        mses = []
+        for i in range(feature_size):
+            cc = pearsonr(prediction[:,:,i ].ravel(),target[:,:,i ].ravel())[0]
+            mse = mean_squared_error(prediction[:,:,i ].ravel(),target[:,:,i ].ravel())
+            ccs.append('{:.03f}'.format(cc))
+            mses.append('{:.03f}'.format(mse))
+        #fig.suptitle('CC: {}, mse: {}'.format(' '.join(ccs),' '.join(mses)))
+        #TODO: save mses and ccs of each sample and save to txt or npy
+        plt.tight_layout()
+        #print ('debug save fig ',text)
+        fig.savefig(path+'/{}_{}_{}'.format(text,start,end))
 
 # checkpointing
 def save_ckpt(path, model, optimizer, save_dict):
@@ -161,7 +207,8 @@ def my_loss(output, target, feature_names):
 
 
 def train(device, result_path, model: nn.Module, data_loader, optimizer, scheduler, step, \
-            feature_names, plot_flag = False, timestamp=False):
+            feature_names, plot_flag = False, timestamp=False,train_dataloader_viz=None,\
+                train_result_folder=None):
     progress_bar = tqdm(data_loader)
     model.train() # turn on train mode
     feature_size = len(feature_names)
@@ -209,14 +256,22 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
                   f'loss {cur_loss:5.5f}')
             total_loss = 0
             start_time = time.time()
-            if plot_flag == True:
+            #if plot_flag == True:
                 # training prediction
-                print ('training prediction')
-                visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+                #print ('training prediction')
+                #visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+    if plot_flag == True:
+        print ('training prediction')
+        visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+        for batch_idx_viz, (data_viz, targets_viz) in enumerate(train_dataloader_viz):
+            output_viz = model(data_viz.to(device))
+        visualize_data_all(train_result_folder, data_viz.detach().numpy(), targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy())
     return return_loss/(batch_idx+1), sep_return_loss/(batch_idx+1), train_pearsonr
 
 def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feature_names,\
-    plot_flag = False, timestamp=False):
+    plot_flag = False, timestamp=False,val_dataloader_viz=None,\
+                val_result_folder=None,text='val'):
+    print ('validating', text)
     feature_size = len(feature_names)
     loss_names = list(map(lambda x: x+'_loss', feature_names))
     model.eval()
@@ -229,9 +284,10 @@ def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feat
             data = data.to(device) # [N, seq_len, feature_size]
             targets = targets.to(device) # [N, seq_len, feature_size]
             output = model(data)
-            if plot_flag and iter_count == 0:
-                print ('validation prediction')
-                visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+            #if plot_flag and iter_count == 0:
+            #    print ('validation prediction')
+            #    visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+                                
                 # if use_wandb:
                 #     wandb.log({"validation plot": fig})
             sep_valid_loss, valid_pearsonr = my_loss(output, targets, feature_names)
@@ -245,6 +301,14 @@ def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feat
             iter_count += 1
             # if use_wandb:
             #     wandb.log(loss_dict_valid) 
+    if plot_flag == True:
+        print ('validation prediction save viz all',text)
+        visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())        
+        for batch_idx_viz, (data_viz, targets_viz) in enumerate(val_dataloader_viz):
+            output_viz = model(data_viz.to(device))
+        visualize_data_all(val_result_folder, data_viz.detach().numpy(), \
+            targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy(),bs=80, text=text)
+
     return total_loss/(len(dataloader) - 1), sep_total_loss/(len(dataloader) - 1), valid_pearsonr
     
 

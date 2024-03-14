@@ -49,7 +49,7 @@ def parse_option():
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
     parser.add_argument('--hist_time', type=float, default=2, help='history data time')
     parser.add_argument('--pred_time', type=float, default=1, help='prediction data time')
-    parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=8, help='batch size')
     parser.add_argument('--feature_names', type=str, default='XYZ_FEATURE_NAMES', help='[DEFAULT_FEATURE_NAMES, XYZ_FEATURE_NAMES, ONE_FEATURE, SC_FEATURE_NAMES, RPY_FEATURE_NAMES, ANGLE_FEATURE_NAMES]')
     parser.add_argument('--load_model', type=bool, default=False, help='load model')
     parser.add_argument('--use_wandb', type=bool, default=False, help='use wandb for logging')
@@ -64,7 +64,7 @@ def parse_option():
     parser.add_argument('--num_epochs', type=int, default=1000, help='number of epochs')
     parser.add_argument('--load_data', type=bool, default=True, help='load data or genearate data from dataset')
     parser.add_argument('--train_len', type=int, default=1000, help='train random data length')
-    
+    parser.add_argument('--out_suffix', type=str, default='', help='out_suffix')
     return parser.parse_args()
     
 
@@ -75,8 +75,7 @@ if __name__ == '__main__':
     np.random.seed(fix_seed)
     #id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
     args = parse_option()
-    saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_\
-                        bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}'
+    saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}_{args.out_suffix}'
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
     # parse augments
@@ -169,7 +168,9 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     val_dataloader = DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=False)
     test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
-    
+    train_dataloader_viz = DataLoader(train_data, batch_size=100, shuffle=False)
+    val_dataloader_viz = DataLoader(val_data, batch_size=80, shuffle=False)
+    test_dataloader_viz = DataLoader(test_data, batch_size=80, shuffle=False)
     
     #training hyperparams
     in_seq_len = HISTORY_LENGTH
@@ -245,14 +246,30 @@ if __name__ == '__main__':
     elif model_name == 'Reformer':
         from reformer_pytorch import Reformer
         n_heads = args.n_heads
-        model = Reformer(
+        model_r = Reformer(
             dim = FEATURE_SIZE,
             depth = args.n_encoder_layers,
             heads = args.n_heads,
             lsh_dropout = 0.1,
-            bucket_size = 60,
+            bucket_size = in_seq_len//2,
             causal = False
         ).to(device=DEVICE).requires_grad_(True)
+        
+        class Reformer_wrap(nn.Module):
+            def __init__(self, in_seq_len, out_seq_len):
+                super(Reformer_wrap, self).__init__()
+                
+                self.seq_len =  in_seq_len
+                self.pred_len =  out_seq_len
+                self.predict_linear = nn.Linear(
+                        self.seq_len,  self.pred_len)
+
+            def forward(self, x):
+                out = model_r(x)
+                return self.predict_linear(out.permute(0, 2, 1)).permute(
+                    0, 2, 1) 
+        model = Reformer_wrap(in_seq_len, out_seq_len).to(device=DEVICE).requires_grad_(True)
+        
         additional_config = {"n_heads": args.n_heads,
                              "n_encoder_layers": args.n_encoder_layers,
         }
@@ -293,24 +310,34 @@ if __name__ == '__main__':
     for epoch in tqdm(range(1, epochs+1)):
         print(f'Epoch #{epoch}')
         epoch_start_time = time.time()
-        train_result_path = f'{saved_path}/train_{epoch}_result.png'
+        train_result_path = f'{saved_path}/single_figure/train_epoch_{epoch}_result.png'
+        os.makedirs(f'{saved_path}/single_figure/',exist_ok=True)
+        if epoch % 10 == 1:
+            train_result_folder = f'{saved_path}/viz/epoch_{epoch}'
+            if not os.path.exists(train_result_folder):
+                os.makedirs(train_result_folder,exist_ok=True)
         train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, \
                             train_dataloader, optimizer, scheduler, step, feature_names, \
-                                plot_flag=True if epoch % 10 == 1 else False, timestamp=args.timestamp)
+                            plot_flag=True if epoch % 10 == 1 else False, timestamp=args.timestamp,\
+                            train_dataloader_viz=train_dataloader_viz,train_result_folder=train_result_folder)
     #     print(train_loss)
         train_mse_losses.append(train_loss)
         sep_train_mse_losses.append(sep_train_loss)
         mean_loss = sum(train_mse_losses)/len(train_mse_losses)
-        val_result_path = f'{saved_path}/val_{epoch}_result.png'
+        val_result_path = f'{saved_path}/single_figure/val_epoch_{epoch}_result.png'
+        val_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, \
                             val_dataloader, feature_names, plot_flag=True if epoch % 10 == 1 else False,\
-                                timestamp=args.timestamp)
+                            timestamp=args.timestamp,\
+                            val_dataloader_viz=val_dataloader_viz,val_result_folder=val_result_folder,text='val')
         val_mse_losses.append(val_loss)
         sep_val_mse_losses.append(sep_val_loss)
-        test_result_path = f'{saved_path}/test_{epoch}_result.png'
+        test_result_path = f'{saved_path}/single_figure/test_epoch_{epoch}_result.png'
+        test_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, \
                             test_dataloader, feature_names, plot_flag=True if epoch % 10 == 1 else False,\
-                                timestamp=args.timestamp)
+                            timestamp=args.timestamp,\
+                            val_dataloader_viz=test_dataloader_viz,val_result_folder=test_result_folder,text='test')
         test_mse_losses.append(test_loss)
         sep_test_mse_losses.append(sep_test_loss)
         elapsed = time.time() - epoch_start_time
