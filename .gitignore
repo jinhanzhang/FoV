@@ -165,4 +165,5 @@ cython_debug/
 /dataset
 /processed_long_sequence
 slurm*
+/jobs
 /checkpoints
