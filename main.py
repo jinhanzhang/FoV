@@ -14,6 +14,7 @@
 # ==============================================================================
 import argparse
 from ast import arg, parse
+from multiprocessing import context
 import random
 from datetime import datetime
 import numpy as np
@@ -44,7 +45,7 @@ def parse_option():
     parser = argparse.ArgumentParser(description='FoV')
     # basic config
     parser.add_argument('--model', type=str, required=True, default='MyTransformer',
-                        help='model name, options: [Autoformer, Transformer, iTransformer, Reformer, TimesNet, PatchTST]')
+                        help='model name, options: [Autoformer, Transformer, iTransformer, Reformer, TimesNet, PatchTST, TimeSeriesTransformerForPrediction]')
     parser.add_argument('--root_path', type=str, default=f'{os.getcwd()}', help='root path of the data file')
     parser.add_argument('--data_path', type=str, default='/processed_data', help='data file')
     parser.add_argument('--hist_time', type=float, default=2, help='history data time')
@@ -73,7 +74,7 @@ if __name__ == '__main__':
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
-    #id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
+    id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
     args = parse_option()
     saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}_{args.out_suffix}'
     if not os.path.exists(saved_path):
@@ -274,6 +275,24 @@ if __name__ == '__main__':
                              "n_encoder_layers": args.n_encoder_layers,
         }
         config.update(additional_config)
+        
+    elif model_name == 'TimeSeriesTransformerForPrediction':
+        from huggingface_hub import hf_hub_download
+        from transformers import TimeSeriesTransformerForPrediction, TimeSeriesTransformerConfig, TimeSeriesTransformerModel
+        config = TimeSeriesTransformerConfig(
+            prediction_length = PREDICTION_LENGTH,
+            context_length = HISTORY_LENGTH,
+            input_size = FEATURE_SIZE,
+            lags_sequence=[1],
+            num_dynamic_real_features=FEATURE_SIZE
+        )
+        model = TimeSeriesTransformerForPrediction(config).to(DEVICE)
+        additional_config = {"n_heads": args.n_heads,
+                             "n_encoder_layers": args.n_encoder_layers,
+                             "n_decoder_layers": args.n_decoder_layers,
+                             "pe_mode": args.pe_mode
+        }
+        config.update(additional_config)
     else:
         print("Model not found")
         sys.exit(0)
@@ -293,9 +312,19 @@ if __name__ == '__main__':
     test_pearsonr_arr = []
     
     # save the config to result
+    # saved_path = f'saved_results/{id}_{model_name}_{HISTORY_TIME}_{PREDICTION_TIME}_batch_{BATCH_SIZE}_feature_{FEATURE_NAMES}_epoch_{EPOCHS}'
+    # print(config)
+    try:
+        with open(f'{saved_path}/config.json', 'w') as f:
+            json.dump(config, f)
+            print(f'saved config to {saved_path}')
+    except (TypeError, OverflowError):
+        with open(f'{saved_path}/config.json', 'w') as f:
+            config_str = str(config)
+            config_str = config_str[config_str.index('{'):]
+            json.dump(json.loads(config_str),f)
+            print(f'convert from string and saved config to {saved_path}')
     
-    with open(f'{saved_path}/config.json', 'w') as f:
-        json.dump(config, f)
     
     # Training
     use_wandb = args.use_wandb
@@ -310,7 +339,7 @@ if __name__ == '__main__':
     for epoch in tqdm(range(1, epochs+1)):
         print(f'Epoch #{epoch}')
         epoch_start_time = time.time()
-        train_result_path = f'{saved_path}/single_figure/train_epoch_{epoch}_result.png'
+        train_result_path = f'{saved_path}/single_figure/train_epoch_{epoch}'
         os.makedirs(f'{saved_path}/single_figure/',exist_ok=True)
         if epoch % 20 == 1:
             train_result_folder = f'{saved_path}/viz/epoch_{epoch}'
@@ -324,7 +353,7 @@ if __name__ == '__main__':
         train_mse_losses.append(train_loss)
         sep_train_mse_losses.append(sep_train_loss)
         mean_loss = sum(train_mse_losses)/len(train_mse_losses)
-        val_result_path = f'{saved_path}/single_figure/val_epoch_{epoch}_result.png'
+        val_result_path = f'{saved_path}/single_figure/val_epoch_{epoch}'
         val_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, \
                             val_dataloader, feature_names, plot_flag=True if epoch % 20 == 1 else False,\
@@ -332,7 +361,7 @@ if __name__ == '__main__':
                             val_dataloader_viz=val_dataloader_viz,val_result_folder=val_result_folder,text='val')
         val_mse_losses.append(val_loss)
         sep_val_mse_losses.append(sep_val_loss)
-        test_result_path = f'{saved_path}/single_figure/test_epoch_{epoch}_result.png'
+        test_result_path = f'{saved_path}/single_figure/test_epoch_{epoch}'
         test_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, \
                             test_dataloader, feature_names, plot_flag=True if epoch % 20 == 1 else False,\

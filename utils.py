@@ -225,25 +225,51 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
         data = data.to(device)
         targets = targets.to(device)
         # with torch.cuda.amp.autocast():
-        output = model(data)
-        optimizer.zero_grad()
-        sep_mse_loss, train_pearsonr = my_loss(output, targets, feature_names)
-        loss = torch.sum(sep_mse_loss[:feature_size])
-        if model.__class__.__name__ =='Reformer':
+        if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
+            feature_size = data.shape[2] if len(data.shape)>2 else 1
+            # extend the last ele of data to match lag_sequence=[1]
+            data = torch.cat((data, data[:,-1,:].unsqueeze(1)),dim=1).to(device)
+            hist_pe = torch.arange(0,data.shape[1]).repeat(feature_size,1).T.repeat(data.shape[0],1).reshape(data.shape).to(device)
+            pred_pe = torch.arange(0,targets.shape[1]).repeat(feature_size,1).T.repeat(targets.shape[0],1).reshape(targets.shape).to(device)
+            
+            output = model(past_values=data,
+                         past_time_features=hist_pe,
+                         past_observed_mask=torch.ones(data.shape).to(device),
+                         future_values=targets,
+                         future_time_features=pred_pe
+                        )
+            optimizer.zero_grad()
+            loss = output.loss
+            train_pearsonr = None
+            
+        elif model.__class__.__name__ =='Reformer':
+            output = model(data)
+            optimizer.zero_grad()
+            sep_mse_loss, train_pearsonr = my_loss(output, targets, feature_names)
+            loss = torch.sum(sep_mse_loss[:feature_size])
             loss.requires_grad_(True)
+        else:
+            output = model(data)
+            optimizer.zero_grad()
+            sep_mse_loss, train_pearsonr = my_loss(output, targets, feature_names)
+            loss = torch.sum(sep_mse_loss[:feature_size])
+        
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
         optimizer.step()
         step += 1
         total_loss += loss.item()
         return_loss += loss.item()
-        sep_return_loss += sep_mse_loss.detach().cpu().numpy()
         progress_bar.set_postfix_str(f"training loss={loss.item():.4e}|avg training loss={total_loss/(batch_idx+1):.4e}")
         loss_dict_train['training loss'] = loss.item()
-        for name_count, loss_name in enumerate(loss_names):
-            loss_dict_train[loss_name] = sep_mse_loss[name_count]
-        loss_dict_train['avg training loss'] = total_loss/(batch_idx+1)
-        loss_dict_train['train pearsonr'] = train_pearsonr
+        if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
+            pass
+        else:
+            sep_return_loss += sep_mse_loss.detach().cpu().numpy()
+            for name_count, loss_name in enumerate(loss_names):
+                loss_dict_train[loss_name] = sep_mse_loss[name_count]
+            loss_dict_train['avg training loss'] = total_loss/(batch_idx+1)
+            loss_dict_train['train pearsonr'] = train_pearsonr
         
         # if use_wandb:
         #     wandb.log(loss_dict_train) 
@@ -260,12 +286,32 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
                 # training prediction
                 #print ('training prediction')
                 #visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+
     if plot_flag == True:
         print ('training prediction')
-        visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
-        for batch_idx_viz, (data_viz, targets_viz) in enumerate(train_dataloader_viz):
-            output_viz = model(data_viz.to(device))
-        visualize_data_all(train_result_folder, data_viz.detach().numpy(), targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy())
+        if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
+            output = model.generate(past_values=data,
+                    past_time_features=hist_pe,
+                    past_observed_mask=torch.ones(data.shape).to(device),
+                    future_time_features=pred_pe
+                ).sequences.mean(dim=1)
+            for batch_idx_viz, (data_viz, targets_viz) in enumerate(train_dataloader_viz):
+                data_viz = torch.cat((data_viz, data_viz[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                viz_hist_pe = torch.arange(0,data_viz.shape[1]).repeat(feature_size,1).T.repeat(data_viz.shape[0],1).reshape(data_viz.shape).to(device)
+                viz_pred_pe = torch.arange(0,targets_viz.shape[1]).repeat(feature_size,1).T.repeat(targets_viz.shape[0],1).reshape(targets_viz.shape).to(device)
+                output_viz = model.generate(past_values=data_viz,
+                    past_time_features=viz_hist_pe,
+                    past_observed_mask=torch.ones(data_viz.shape).to(device),
+                    future_time_features=viz_pred_pe
+                ).sequences.mean(dim=1)
+            
+        else:
+            for batch_idx_viz, (data_viz, targets_viz) in enumerate(train_dataloader_viz):
+                output_viz = model(data_viz.to(device))
+            
+            
+        visualize_data(result_path+f'_{batch_idx}_result.png', data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+        visualize_data_all(train_result_folder, data_viz.detach().cpu().numpy(), targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy())
     return return_loss/(batch_idx+1), sep_return_loss/(batch_idx+1), train_pearsonr
 
 def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feature_names,\
@@ -280,35 +326,68 @@ def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feat
     loss_dict_valid = {}
     iter_count = 0
     with torch.no_grad():
-        for (data, targets) in dataloader:
+        for batch_idx, (data, targets) in enumerate(dataloader):
             data = data.to(device) # [N, seq_len, feature_size]
             targets = targets.to(device) # [N, seq_len, feature_size]
-            output = model(data)
-            #if plot_flag and iter_count == 0:
-            #    print ('validation prediction')
-            #    visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
-                                
-                # if use_wandb:
-                #     wandb.log({"validation plot": fig})
-            sep_valid_loss, valid_pearsonr = my_loss(output, targets, feature_names)
-            total_loss += torch.sum(sep_valid_loss)
-            sep_total_loss += sep_valid_loss.detach().cpu().numpy()
-            #import pdb;pdb.set_trace()
-            for name_count, loss_name in enumerate(loss_names):
-                loss_dict_valid[loss_name] = sep_valid_loss[name_count]
-            #loss_dict_valid['valid loss'] = sep_valid_loss
-            loss_dict_valid['valid pearsonr'] = valid_pearsonr[0]
-            iter_count += 1
+            if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
+                feature_size = data.shape[2] if len(data.shape)>2 else 1
+                data = torch.cat((data, data[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                hist_pe = torch.arange(0,data.shape[1]).repeat(feature_size,1).T.repeat(data.shape[0],1).reshape(data.shape).to(device)
+                pred_pe = torch.arange(0,targets.shape[1]).repeat(feature_size,1).T.repeat(targets.shape[0],1).reshape(targets.shape).to(device)
+                output = model(past_values=data,
+                            past_time_features=hist_pe,
+                            past_observed_mask=torch.ones(data.shape).to(device),
+                            future_values=targets,
+                            future_time_features=pred_pe
+                            )
+                loss = output.loss
+                total_loss += torch.sum(loss)
+                output = model.generate(past_values=data,
+                            past_time_features=hist_pe,
+                            past_observed_mask=torch.ones(data.shape).to(device),
+                            future_time_features=pred_pe
+                            ).sequences.mean(dim=1)
+                valid_pearsonr = None
+            else:
+                output = model(data)
+                
+                sep_valid_loss, valid_pearsonr = my_loss(output, targets, feature_names)
+                total_loss += torch.sum(sep_valid_loss)
+                sep_total_loss += sep_valid_loss.detach().cpu().numpy()
+                for name_count, loss_name in enumerate(loss_names):
+                    loss_dict_valid[loss_name] = sep_valid_loss[name_count]
+                #loss_dict_valid['valid loss'] = sep_valid_loss
+                loss_dict_valid['valid pearsonr'] = valid_pearsonr[0]
+                iter_count += 1
             # if use_wandb:
             #     wandb.log(loss_dict_valid) 
-    if plot_flag == True:
-        print ('validation prediction save viz all',text)
-        visualize_data(result_path, data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())        
-        for batch_idx_viz, (data_viz, targets_viz) in enumerate(val_dataloader_viz):
-            output_viz = model(data_viz.to(device))
-        visualize_data_all(val_result_folder, data_viz.detach().numpy(), \
-            targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy(),bs=80, text=text)
+        if plot_flag == True:
+            if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
+                output = model.generate(past_values=data,
+                        past_time_features=hist_pe,
+                        past_observed_mask=torch.ones(data.shape).to(device),
+                        future_time_features=pred_pe
+                    ).sequences.mean(dim=1)
+                for batch_idx_viz, (data_viz, targets_viz) in enumerate(val_dataloader_viz):
+                    data_viz = torch.cat((data_viz, data_viz[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                    viz_hist_pe = torch.arange(0,data_viz.shape[1]).repeat(feature_size,1).T.repeat(data_viz.shape[0],1).reshape(data_viz.shape).to(device)
+                    viz_pred_pe = torch.arange(0,targets_viz.shape[1]).repeat(feature_size,1).T.repeat(targets_viz.shape[0],1).reshape(targets_viz.shape).to(device)
+                    output_viz = model.generate(past_values=data_viz,
+                        past_time_features=viz_hist_pe,
+                        past_observed_mask=torch.ones(data_viz.shape).to(device),
+                        future_time_features=viz_pred_pe
+                    ).sequences.mean(dim=1)
+                
+            else:
+                for batch_idx_viz, (data_viz, targets_viz) in enumerate(val_dataloader_viz):
+                    output_viz = model(data_viz.to(device))
+            print ('validation prediction save viz all',text)    
+            visualize_data(result_path+f'_{batch_idx}_result.png', data.detach().cpu().numpy(), targets.detach().cpu().numpy(), output.detach().cpu().numpy())
+            visualize_data_all(val_result_folder, data_viz.detach().cpu().numpy(), \
+            targets_viz.detach().cpu().numpy(), output_viz.detach().cpu().numpy(),bs=80, text=text)  
+            
 
+                
     return total_loss/(len(dataloader) - 1), sep_total_loss/(len(dataloader) - 1), valid_pearsonr
     
 
