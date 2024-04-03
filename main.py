@@ -76,7 +76,7 @@ if __name__ == '__main__':
     np.random.seed(fix_seed)
     id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
     args = parse_option()
-    saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}_{args.out_suffix}'
+    saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}_n_heads_{args.n_heads}_head_dim_{args.head_dim}_{args.out_suffix}'
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
     # parse augments
@@ -341,13 +341,13 @@ if __name__ == '__main__':
         epoch_start_time = time.time()
         train_result_path = f'{saved_path}/single_figure/train_epoch_{epoch}'
         os.makedirs(f'{saved_path}/single_figure/',exist_ok=True)
-        if epoch % 20 == 1:
+        if epoch % 20 == 0 or epoch == 1:
             train_result_folder = f'{saved_path}/viz/epoch_{epoch}'
             if not os.path.exists(train_result_folder):
                 os.makedirs(train_result_folder,exist_ok=True)
         train_loss, sep_train_loss, train_pearsonr = train(DEVICE, train_result_path, model, \
                             train_dataloader, optimizer, scheduler, step, feature_names, \
-                            plot_flag=True if epoch % 20 == 1 else False, timestamp=args.timestamp,\
+                            plot_flag=True if epoch % 20 == 0 else False, timestamp=args.timestamp,\
                             train_dataloader_viz=train_dataloader_viz,train_result_folder=train_result_folder)
     #     print(train_loss)
         train_mse_losses.append(train_loss)
@@ -356,7 +356,7 @@ if __name__ == '__main__':
         val_result_path = f'{saved_path}/single_figure/val_epoch_{epoch}'
         val_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         val_loss, sep_val_loss, val_pearsonr = validate(DEVICE, val_result_path, model, \
-                            val_dataloader, feature_names, plot_flag=True if epoch % 20 == 1 else False,\
+                            val_dataloader, feature_names, plot_flag=True if epoch % 20 == 0 else False,\
                             timestamp=args.timestamp,\
                             val_dataloader_viz=val_dataloader_viz,val_result_folder=val_result_folder,text='val')
         val_mse_losses.append(val_loss)
@@ -364,7 +364,7 @@ if __name__ == '__main__':
         test_result_path = f'{saved_path}/single_figure/test_epoch_{epoch}'
         test_result_folder = f'{saved_path}/viz/epoch_{epoch}'
         test_loss, sep_test_loss, test_pearsonr = validate(DEVICE, test_result_path, model, \
-                            test_dataloader, feature_names, plot_flag=True if epoch % 20 == 1 else False,\
+                            test_dataloader, feature_names, plot_flag=True if epoch % 20 == 0 else False,\
                             timestamp=args.timestamp,\
                             val_dataloader_viz=test_dataloader_viz,val_result_folder=test_result_folder,text='test')
         test_mse_losses.append(test_loss)
@@ -374,7 +374,7 @@ if __name__ == '__main__':
         print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
             f'valid loss {val_loss:5.4f} | mean loss {mean_loss:8.4f}')
         print('-' * 89)
-        if epoch % 20 == 1:
+        if epoch % 20 == 0 or epoch == 1:
             fig, ax = plt.subplots(1,2, figsize=(12,4))
             #ax.plot([i.detach().cpu().numpy() for i in test_losses], label='train loss')
             ax[0].plot([i.detach().cpu().numpy() for i in val_mse_losses[5:]] , label='validation loss')

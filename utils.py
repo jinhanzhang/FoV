@@ -228,7 +228,7 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
         if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
             feature_size = data.shape[2] if len(data.shape)>2 else 1
             # extend the last ele of data to match lag_sequence=[1]
-            data = torch.cat((data, data[:,-1,:].unsqueeze(1)),dim=1).to(device)
+            data = torch.cat((data[:,0,:].unsqueeze(1),data),dim=1).to(device)
             hist_pe = torch.arange(0,data.shape[1]).repeat(feature_size,1).T.repeat(data.shape[0],1).reshape(data.shape).to(device)
             pred_pe = torch.arange(0,targets.shape[1]).repeat(feature_size,1).T.repeat(targets.shape[0],1).reshape(targets.shape).to(device)
             
@@ -296,7 +296,7 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
                     future_time_features=pred_pe
                 ).sequences.mean(dim=1)
             for batch_idx_viz, (data_viz, targets_viz) in enumerate(train_dataloader_viz):
-                data_viz = torch.cat((data_viz, data_viz[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                data_viz = torch.cat((data_viz[:,0,:].unsqueeze(1),data_viz),dim=1).to(device)
                 viz_hist_pe = torch.arange(0,data_viz.shape[1]).repeat(feature_size,1).T.repeat(data_viz.shape[0],1).reshape(data_viz.shape).to(device)
                 viz_pred_pe = torch.arange(0,targets_viz.shape[1]).repeat(feature_size,1).T.repeat(targets_viz.shape[0],1).reshape(targets_viz.shape).to(device)
                 output_viz = model.generate(past_values=data_viz,
@@ -331,7 +331,7 @@ def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feat
             targets = targets.to(device) # [N, seq_len, feature_size]
             if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
                 feature_size = data.shape[2] if len(data.shape)>2 else 1
-                data = torch.cat((data, data[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                data = torch.cat((data[:,0,:].unsqueeze(1),data),dim=1).to(device)
                 hist_pe = torch.arange(0,data.shape[1]).repeat(feature_size,1).T.repeat(data.shape[0],1).reshape(data.shape).to(device)
                 pred_pe = torch.arange(0,targets.shape[1]).repeat(feature_size,1).T.repeat(targets.shape[0],1).reshape(targets.shape).to(device)
                 output = model(past_values=data,
@@ -369,7 +369,7 @@ def validate(device, result_path, model: nn.Module, dataloader: DataLoader, feat
                         future_time_features=pred_pe
                     ).sequences.mean(dim=1)
                 for batch_idx_viz, (data_viz, targets_viz) in enumerate(val_dataloader_viz):
-                    data_viz = torch.cat((data_viz, data_viz[:,-1,:].unsqueeze(1)),dim=1).to(device)
+                    data_viz = torch.cat((data_viz[:,0,:].unsqueeze(1),data_viz),dim=1).to(device)
                     viz_hist_pe = torch.arange(0,data_viz.shape[1]).repeat(feature_size,1).T.repeat(data_viz.shape[0],1).reshape(data_viz.shape).to(device)
                     viz_pred_pe = torch.arange(0,targets_viz.shape[1]).repeat(feature_size,1).T.repeat(targets_viz.shape[0],1).reshape(targets_viz.shape).to(device)
                     output_viz = model.generate(past_values=data_viz,
