@@ -15,6 +15,8 @@ import wandb
 from dataloader.generate_data import *
 from scipy.stats import pearsonr
 from sklearn.metrics import mean_squared_error
+from scipy.signal import savgol_filter
+
 class FoVDataset(Dataset):
     def __init__(self, x_data, y_data, feature_idx, timestamp=False):
         self.feature_idx = feature_idx
@@ -38,7 +40,7 @@ class FoVDataset(Dataset):
         return x,y
     
 class FoVTrainDataset(Dataset):
-    def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False):
+    def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False, denoise_flag=False):
         self.feature_idx = feature_idx
         self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
         self.hist_length = int(hist_time*frame_rate)
@@ -168,8 +170,6 @@ def load_ckpt(path, model, optimizer, device='cuda'):
     model.eval()
     return model, optimizer, checkpoint
 
-
-
     
 def get_data(batch_size, input_sequence_length, output_sequence_length):
     i = input_sequence_length + output_sequence_length
@@ -226,8 +226,7 @@ def train(device, result_path, model: nn.Module, data_loader, optimizer, schedul
         targets = targets.to(device)
         # with torch.cuda.amp.autocast():
         if model.__class__.__name__ =='TimeSeriesTransformerForPrediction':
-            feature_size = data.shape[2] if len(data.shape)>2 else 1
-            # extend the last ele of data to match lag_sequence=[1]
+            # extend the first ele of data to match lag_sequence=[1]
             data = torch.cat((data[:,0,:].unsqueeze(1),data),dim=1).to(device)
             hist_pe = torch.arange(0,data.shape[1]).repeat(feature_size,1).T.repeat(data.shape[0],1).reshape(data.shape).to(device)
             pred_pe = torch.arange(0,targets.shape[1]).repeat(feature_size,1).T.repeat(targets.shape[0],1).reshape(targets.shape).to(device)

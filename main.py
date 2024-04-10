@@ -36,7 +36,7 @@ from tqdm import tqdm
 import sys
 import wandb
 wandb.__version__
-from utils.utils import *
+from utils import *
 from dataloader.generate_data import *
 
 
@@ -78,6 +78,8 @@ if __name__ == '__main__':
     id = datetime.now().strftime("%m-%d-%Y-%H:%M:%S")
     args = parse_option()
     saved_path = f'saved_results/{args.model}_hist_{args.hist_time}_pred_{args.pred_time}_bs_{args.batch_size}_feat_{args.feature_names}_epoch_{args.num_epochs}_n_heads_{args.n_heads}_head_dim_{args.head_dim}_{args.out_suffix}'
+    if args.denoise:
+        saved_path = f'{saved_path}_denoise'
     if not os.path.exists(saved_path):
         os.makedirs(saved_path)
     # parse augments
@@ -116,7 +118,6 @@ if __name__ == '__main__':
     LOAD_MODEL = args.load_model
     TRAIN_LEN = args.train_len
     DENOISE_FLAG = args.denoise
-    print("denoise flag: ", DENOISE_FLAG)
     
     # load data
     
