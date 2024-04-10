@@ -36,7 +36,7 @@ from tqdm import tqdm
 import sys
 import wandb
 wandb.__version__
-from utils import *
+from utils.utils import *
 from dataloader.generate_data import *
 
 
@@ -65,6 +65,7 @@ def parse_option():
     parser.add_argument('--num_epochs', type=int, default=1000, help='number of epochs')
     parser.add_argument('--load_data', type=bool, default=True, help='load data or genearate data from dataset')
     parser.add_argument('--train_len', type=int, default=1000, help='train random data length')
+    parser.add_argument('--denoise', type=bool, default=False, help='denoise data or not')
     parser.add_argument('--out_suffix', type=str, default='', help='out_suffix')
     return parser.parse_args()
     
@@ -114,13 +115,23 @@ if __name__ == '__main__':
     EPOCHS = args.num_epochs
     LOAD_MODEL = args.load_model
     TRAIN_LEN = args.train_len
+    DENOISE_FLAG = args.denoise
+    print("denoise flag: ", DENOISE_FLAG)
     
     # load data
-    processed_data_path = f'{PROJECT_PATH}/processed_data'
-    processed_long_sequence_path = f'{PROJECT_PATH}/processed_long_sequence'
-    dataset_path = f'{PROJECT_PATH}/dataset'
+    
+    if DENOISE_FLAG:
+        processed_data_path = f'{PROJECT_PATH}/denoised_processed_data'
+        processed_long_sequence_path = f'{PROJECT_PATH}/denoised_processed_long_sequence'
+        # dataset_path = f'{PROJECT_PATH}/denoised_dataset'
+        dataset_path = f'{PROJECT_PATH}/dataset'
+        
+    else:
+        processed_data_path = f'{PROJECT_PATH}/processed_data'
+        processed_long_sequence_path = f'{PROJECT_PATH}/processed_long_sequence'  
+        dataset_path = f'{PROJECT_PATH}/dataset'
     #import pdb; pdb.set_trace()
-    if args.load_data is True and os.path.isfile(f'{PROJECT_PATH}/processed_data/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv'):
+    if args.load_data is True and os.path.isfile(f'{processed_data_path}/x_val_{HISTORY_TIME}_{PREDICTION_TIME}.csv'):
         print("load data from stored files")
 
         # read val and test processed data
@@ -132,7 +143,7 @@ if __name__ == '__main__':
     else:
         # generate val and test data from dataset
         print ('generate from scratch')
-        _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, processed_data_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE)
+        _,_, x_val, y_val, x_test, y_test, mean_std = generate_data(dataset_path, processed_data_path, HISTORY_TIME, PREDICTION_TIME, FRAME_RATE, DENOISE_FLAG)
         print("generate data: ", x_val.shape, y_val.shape, x_test.shape, y_test.shape, mean_std.shape)
         
     # synthetic data
