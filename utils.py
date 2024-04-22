@@ -15,7 +15,6 @@ import wandb
 from dataloader.generate_data import *
 from scipy.stats import pearsonr
 from sklearn.metrics import mean_squared_error
-from scipy.signal import savgol_filter
 
 class FoVDataset(Dataset):
     def __init__(self, x_data, y_data, feature_idx, timestamp=False):
@@ -40,7 +39,7 @@ class FoVDataset(Dataset):
         return x,y
     
 class FoVTrainDataset(Dataset):
-    def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False, denoise_flag=False):
+    def __init__(self, data_path, processed_long_sequence_path, feature_idx,hist_time, pred_time, frame_rate, train_len, timestamp=False):
         self.feature_idx = feature_idx
         self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
         self.hist_length = int(hist_time*frame_rate)
@@ -188,17 +187,20 @@ def my_loss(output, target, feature_names):
         feature_idx = feature_names.index('head_r_sin')
         output_rx = torch.atan2(output[:,:,feature_idx], output[:,:,feature_idx+1]).unsqueeze(2)
         target_rx = torch.atan2(target[:,:,feature_idx], target[:,:,feature_idx+1]).unsqueeze(2)
-        output = torch.cat((output,output_rx),-1)
+        # output = torch.cat((output,output_rx),-1)
+        # target = torch.cat((target,target_rx),-1)
     if 'head_p_sin' in feature_names:
         feature_idx = feature_names.index('head_p_sin')
         output_ry = torch.atan2(output[:,:,feature_idx], output[:,:,feature_idx+1]).unsqueeze(2)
         target_ry = torch.atan2(target[:,:,feature_idx], target[:,:,feature_idx+1]).unsqueeze(2)
-        output = torch.cat((output,output_ry),-1)
+        # output = torch.cat((output,output_ry),-1)
+        # target = torch.cat((target,target_ry),-1)
     if 'head_y_sin' in feature_names:
         feature_idx = feature_names.index('head_y_sin')
         output_rz = torch.atan2(output[:,:,feature_idx], output[:,:,feature_idx+1]).unsqueeze(2)
         target_rz = torch.atan2(target[:,:,feature_idx], target[:,:,feature_idx+1]).unsqueeze(2)
-        output = torch.cat((output,output_rz),-1)
+        # output = torch.cat((output,output_rz),-1)
+        # target = torch.cat((target,target_rz),-1)
         
     
     mse_loss = torch.mean((output - target) ** 2, [0,1])
