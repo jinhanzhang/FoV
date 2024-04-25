@@ -67,6 +67,7 @@ def parse_option():
     parser.add_argument('--train_len', type=int, default=1000, help='train random data length')
     parser.add_argument('--denoise', type=bool, default=False, help='denoise data or not')
     parser.add_argument('--out_suffix', type=str, default='', help='out_suffix')
+    parser.add_argument('--dataset', type=str, default='', help='dataset choise:["",""]')
     return parser.parse_args()
     
 

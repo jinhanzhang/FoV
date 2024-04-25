@@ -8,7 +8,7 @@
 #SBATCH --time=3:59:00
 #SBATCH --gres=gpu:1
 
-singularity exec --nv --overlay /scratch/jz5952/fov_env/my_pytorch.ext3:ro /scratch/work/public/singularity/cuda11.8.86-cudnn8.7-devel-ubuntu22.04.2.sif /bin/bash -c "source /ext3/env.sh && cd /scratch/jz5952/FoV && python3 main.py --model MyTransformer --num_epochs 300 --hist_time 1.0 --pred_time 0.2 --n_heads 5 --head_dim 16 --feature_names SC_FEATURE_NAMES --denoise True"
+singularity exec --nv --overlay /scratch/jz5952/fov_env/my_pytorch.ext3:ro /scratch/work/public/singularity/cuda11.8.86-cudnn8.7-devel-ubuntu22.04.2.sif /bin/bash -c "source /ext3/env.sh && cd /scratch/jz5952/FoV && python3 main.py --model TimeSeriesTransformerForPrediction --num_epochs 300 --hist_time 1.0 --pred_time 0.2 --n_heads 5 --head_dim 16 --feature_names DEFAULT_FEATURE_NAMES --denoise True"
 # source /ext3/env.sh
 # cd /scratch/jz5952/FoV
 

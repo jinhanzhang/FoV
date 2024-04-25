@@ -19,8 +19,8 @@ from sklearn.metrics import mean_squared_error
 class FoVDataset(Dataset):
     def __init__(self, x_data, y_data, feature_idx, timestamp=False):
         self.feature_idx = feature_idx
-        self.x_data = x_data[:,:,feature_idx]
-        self.y_data = y_data[:,:,feature_idx]
+        self.x_data = x_data
+        self.y_data = y_data
         if timestamp:
             bs, input_temporal_dim, input_feature_dim = self.x_data.shape
             bs, output_temporal_dim, output_feature_dim = self.y_data.shape
@@ -57,6 +57,39 @@ class FoVTrainDataset(Dataset):
     
     def __getitem__(self, idx):
         file_idx = random.randint(0, len(self.train_files)-1)
+        file = self.train_files[file_idx]
+        df = pd.read_csv(file, dtype=np.float32)
+        start_idx = random.randint(0, len(df)-self.total_length)
+        
+        x = torch.tensor(df.iloc[start_idx:start_idx+self.hist_length,self.feature_idx].values)
+        y = torch.tensor(df.iloc[start_idx+self.hist_length:start_idx+self.hist_length+self.pred_length,self.feature_idx].values)
+        return x,y
+    
+class FoVTrainProbabilityDataset(Dataset):
+    def __init__(self, data_path, processed_long_sequence_path,hist_time, pred_time, frame_rate, train_len, timestamp=False):
+        self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
+        self.hist_length = int(hist_time*frame_rate)
+        self.pred_length = int(pred_time*frame_rate)
+        self.total_length = int(self.hist_length + self.pred_length)
+        self.timestamp = timestamp
+        self.train_len = train_len
+        # check if processed data exists
+        if len(self.train_files) == 0:
+            createAndSaveLongSequence(data_path,processed_long_sequence_path, hist_time, pred_time, frame_rate)
+            self.train_files = glob.glob(processed_long_sequence_path + f'/*_{hist_time}_{pred_time}.csv')
+        # generate the probability for each file based on their length
+        self.probability = []
+        for file in self.train_files:
+            df = pd.read_csv(file, dtype=np.float32)
+            self.probability.append(len(df)-self.total_length)
+        self.probability = np.array(self.probability)/np.sum(self.probability)
+        
+    def __len__(self):
+        return self.train_len
+    
+    def __getitem__(self, idx):
+        # generate a random file based on the probability
+        file_idx = np.random.choice(len(self.train_files), p=self.probability)
         file = self.train_files[file_idx]
         df = pd.read_csv(file, dtype=np.float32)
         start_idx = random.randint(0, len(df)-self.total_length)
@@ -118,8 +151,7 @@ def visualize_data_all(path, data, target, prediction=None,bs=100,text='train'):
     for batch in range(bs // sample_nums):
         start = batch * sample_nums
         end = min(batch * sample_nums+sample_nums,bs)
-    
-        fig, ax = plt.subplots(sample_nums,3,figsize=(5*feature_size,4*sample_nums))
+        fig, ax = plt.subplots(sample_nums,feature_size,figsize=(5*feature_size,4*sample_nums))
         for j, sample_id in enumerate(np.arange(start, end)):
             for i in range(feature_size):  
                 ax[j, i ].plot(np.arange(0,in_seq_len), data[sample_id,:,i ],label='input')
