@@ -1,0 +1,1 @@
+rsync -avzh * --exclude={'checkpoints/','checkpoints','noteboooks','noteboooks/'} greene:/scratch/xc1490/projects/FoV/
